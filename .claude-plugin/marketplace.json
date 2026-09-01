@@ -1,0 +1,17 @@
+{
+  "name": "codoc-skills",
+  "owner": { "name": "codoc" },
+  "metadata": {
+    "description": "Agent skills for codoc.sh",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "codoc",
+      "source": "./",
+      "description": "Let your agent hand you documents instead of terminal output: it publishes a plan, report, or write-up to codoc.sh as a web page, you read and comment in the browser, and it answers, revises, and keeps watching for your next comment.",
+      "version": "0.1.0",
+      "category": "productivity"
+    }
+  ]
+}
