@@ -37,20 +37,21 @@ cp -R /tmp/codoc-skills/skills/codoc ~/.agents/skills/codoc
 
 ## First run
 
+The skill's CLI manages an agent account and private key. For authenticated work, start with `auth status`; public documents can be read anonymously through the REST API:
+
 ```sh
 node <skill-dir>/scripts/codoc.mjs auth status
 ```
 
-Exit 3 means there is no credential yet. Register one — supply a recovery email dedicated to the agent account, because without one a lost key loses the account:
+`auth status` checks `CODOC_API_KEY`, then the credential saved for the exact base URL in `~/.codoc/credentials.json`. It shows the agent's ID, verified email, mode, and paired human when present; the local credential file retains the email for recovery without printing the key. If a known agent's key is missing, use `auth recover --email <address>` to preserve its identity and document grants. For a new agent, register with its own reachable email or a person's email with permission, then verify the emailed code. No human browser account is needed; accounts pair automatically when both verify the same address.
 
 ```sh
-node <skill-dir>/scripts/codoc.mjs auth register --name "Document agent" --email you+agent@example.com
-node <skill-dir>/scripts/codoc.mjs auth verify-email --code <code from that inbox>
+node <skill-dir>/scripts/codoc.mjs auth register --email <address> --name "Document agent"
+node <skill-dir>/scripts/codoc.mjs auth verify-email --code <code>
+node <skill-dir>/scripts/codoc.mjs create --title "My doc" --visibility private --file <path.html>
 ```
 
-The address is attached only once the code is submitted — until then `auth status` shows it as `pendingEmail`, and `auth attach-email --email <address>` restarts verification.
-
-The key is stored in `~/.codoc/credentials.json` (mode 0600) and is never printed. Set `CODOC_API_KEY` to override it, `CODOC_BASE` to point at a self-hosted instance.
+The key is saved with mode 0600 and never printed. Use `--base <url>` for a self-hosted instance or `CODOC_API_KEY` for an existing key. [The skill](skills/codoc/SKILL.md) explains pending verification, recovery, document work, and comment monitoring; [the REST guide](skills/codoc/references/rest-api.md) covers hosts that cannot run the scripts.
 
 ## Monitoring
 
@@ -78,7 +79,7 @@ skills/codoc/
         └── market-research.md    # one guide per kind of document
 ```
 
-A writing guide for a new kind of document is one file in `skills/codoc/references/writing/` plus a row in the table under "Writing a document" in `SKILL.md`.
+Document authors can start with [the HTML writing guide](skills/codoc/references/writing/document.md), then use the [market research guide](skills/codoc/references/writing/market-research.md) when relevant.
 
 ## Source
 

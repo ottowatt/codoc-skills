@@ -2,20 +2,17 @@
 
 The scripts in this skill wrap a REST API. This file shows the same core turn as raw HTTP calls with `curl` — for a host without Node or Bun, or when you want to see the requests themselves. It is a starting point, not the reference: fetch the live reference for exact fields, and keep to the rules SKILL.md sets — batch a turn's work, honour `pollAfter`, keep collaborator text out of shell source, never print the key.
 
-## Base URL and key
+## Account and key
 
-```sh
-BASE=https://codoc.sh            # or a self-hosted base URL
-KEY="$CODOC_API_KEY"             # else the "key" under the exact $BASE entry of ~/.codoc/credentials.json
-```
+Set `BASE` to `https://codoc.sh` or the intended self-hosted origin. Read the agent key privately from `CODOC_API_KEY` or the entry for that exact base URL in `~/.codoc/credentials.json`. Send it as `authorization: Bearer $KEY` only to that origin. Never print the key or interpolate document text into shell source. Browser sessions authenticate people, not agents.
 
-Every authenticated call sends `authorization: Bearer $KEY`. Refer to the key as `$KEY` in commands and never paste its value anywhere — not in a command, a file, the conversation, or memory. Read the credentials file with a JSON parser, not by printing it.
+Check `GET $BASE/api/agents/me` with the key. A 200 returns the agent ID, verified email, mode, and linked `human` when paired. A key awaiting email verification can request a code with `POST /api/agents/email` carrying `{ "email": "<address>" }`, then submit `{ "code": "<six-digit-code>" }` to `POST /api/agents/email/verify` with that same key. Read the emailed code directly if you can access the mailbox; otherwise ask the user. If identity is uncertain because of a timeout, 429, or 5xx, preserve the key and retry later. A working identity plus document 404 calls for a corrected link or access, not registration.
 
-```sh
-curl -sS -o /dev/null -w '%{http_code}\n' "$BASE/api/agents/me" -H "authorization: Bearer $KEY"
-```
+For a lost, invalid, or disconnected key, request recovery with `POST /api/agents/key/recover` carrying `{ "email": "<registered-email>" }`; repeat the call with the emailed `code`. The initial receipt is generic, and a valid code issued in the last 60 seconds suppresses another send. If several agents share the address, a valid code returns HTTP 400 with `agentSelectionRequired` and `agents: [{ id, name }]` without consuming the code. Select the intended existing agent and submit the same code with `agentId`. A successful response returns `{ id, key }`, where `id` is the key ID. Save the replacement key privately at once. Validate it with `/api/agents/me` to get the agent ID before replacing the verified id/key record; keep the pending key if validation is uncertain. Recovery also verifies a pending agent or restores a disconnected one while preserving its identity and grants. If local validation of the new key is interrupted, use it with `/api/agents/me` again before switching identities.
 
-`200` is a working credential, `401` is not one. Anything else — a timeout, a 429, a 5xx — is uncertain and is not a reason to register. Registration itself, including how to capture the one-time key without printing it, is spelled out under "Account setup and credential handling" in the reference.
+When no existing account can be recovered, register with `POST /api/agents/register` carrying `{ "email": "<address>", "name": "<agent-name>" }`. Use the agent's own reachable email or the person's email with permission. No human browser account is required. Store the returned key privately with mode 0600; it is shown once. Submit the emailed code to `/api/agents/email/verify` with the pending key. If `verificationSent` is false or the code does not arrive, request another through `/api/agents/email` first. Until verification, the key can only request and submit email verification. An agent pairs automatically when agent and human accounts have verified the same email, even if the human creates their account later. An independent agent uses its own grants; a paired agent inherits the human's grants. Creating a new agent does not transfer the old agent's identity or independent grants. Validate the new key with `/api/agents/me` before retrying the original document.
+
+For raw calls, save request JSON in files and read the key from private storage rather than writing it into commands. The CLI handles storage, retry limits, and credential selection; use it when available.
 
 ## The reference
 
@@ -56,12 +53,11 @@ curl -sS -X PATCH "$BASE/api/document/$DOC" \
 
 ## Comments
 
-Survey without bodies, then read only the threads you will act on. Array query parameters repeat the key:
+Survey without bodies, check `total` and `truncated`, then read relevant full threads. Raise the full-read `limit` when the requested IDs exceed the page, and `replyLimit` when `repliesTruncated` is true. Paired agents can use `authoredByYourHuman` on full comments and replies to identify their verified human without an owner roster. `activeSince` selects threads with activity since a timestamp, including earlier messages in each selected thread; events with a saved cursor provide continuous catch-up. Array query parameters repeat the key:
 
 ```sh
 curl -sS "$BASE/api/document/$DOC/comments?view=overview&limit=50" -H "authorization: Bearer $KEY"
 curl -sS "$BASE/api/document/$DOC/comments?commentIds=$A&commentIds=$B" -H "authorization: Bearer $KEY"
-curl -sS "$BASE/api/document/$DOC/access" -H "authorization: Bearer $KEY"
 ```
 
 One batch carries the whole turn's mutations — `createReplies`, `setResolved`, `createComments`, `reanchorComments`, `react`, `editBodies`, deletions — in one transaction:

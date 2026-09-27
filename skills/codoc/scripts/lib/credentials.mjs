@@ -46,7 +46,7 @@ function validKey(value) {
 
 export function credentialCandidates(base, env = process.env) {
   const candidates = [];
-  // Account setup and credential handling: environment precedence is part of the wire workflow.
+  // Credentials and account responses: environment precedence is part of the wire workflow.
   if (validKey(env.CODOC_API_KEY)) candidates.push({ key: env.CODOC_API_KEY, source: "env" });
   const entry = readCredentialStore(env)[base];
   if (entry && validKey(entry.key) && !candidates.some(({ key }) => key === entry.key)) {
@@ -91,8 +91,20 @@ export function rewriteCredentialStore(env = process.env) {
 
 export function storeCredential(base, credential, env = process.env) {
   const store = readCredentialStore(env);
-  store[base] = { id: credential.id, key: credential.key };
-  // Account setup and credential handling: rename makes a crash preserve the old complete store.
+  const retainedEmail = store[base]?.id === credential.id ? store[base]?.email : undefined;
+  store[base] = { id: credential.id, key: credential.key, idVerified: true,
+    ...((credential.email ?? retainedEmail) ? { email: credential.email ?? retainedEmail } : {}),
+    ...(credential.pendingVerification ? { pendingVerification: true } : {}) };
+  // Credentials and account responses: rename makes a crash preserve the old complete store.
+  return writeCredentialStore(store, env);
+}
+
+export function storePendingCredential(base, key, expectedId, env = process.env) {
+  const store = readCredentialStore(env);
+  store[base] = {
+    ...(store[base] ?? {}),
+    pendingCredential: { key, ...(expectedId ? { expectedId } : {}) },
+  };
   return writeCredentialStore(store, env);
 }
 

@@ -33,6 +33,15 @@ function transportMessage(error) {
   return redact(error instanceof Error ? error.message : String(error));
 }
 
+function safeAgentSelection(data) {
+  if (data?.error !== "invalid_request" || data.agentSelectionRequired !== true || !Array.isArray(data.agents)) return null;
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+  if (data.agents.length < 2) return null;
+  const agents = data.agents.map((agent) => ({ id: agent?.id, name: agent?.name }));
+  if (!agents.every((agent) => typeof agent.id === "string" && uuid.test(agent.id) && typeof agent.name === "string" && agent.name.length <= 200)) return null;
+  return { error: "agent_selection_required", message: "Several agents use this email. Choose the existing identity by id and retry with the same code.", agents };
+}
+
 export async function requestOnce(base, pathname, options = {}) {
   const method = options.method ?? "GET";
   const headers = {};
@@ -53,7 +62,12 @@ export async function requestOnce(base, pathname, options = {}) {
     });
     text = await response.text();
   } catch (error) {
-    return { transportError: { error: "transport", message: transportMessage(error) } };
+    return {
+      transportError: {
+        error: "transport",
+        message: options.sensitiveResponse ? "The credential request could not be completed." : transportMessage(error),
+      },
+    };
   }
   let data;
   if (options.expectText) {
@@ -62,13 +76,22 @@ export async function requestOnce(base, pathname, options = {}) {
     try {
       data = text === "" ? {} : JSON.parse(text);
     } catch {
-      const invalid = { error: "invalid_response", message: redact(`Server returned non-JSON content: ${text.slice(0, 200)}`) };
+      const invalid = {
+        error: "invalid_response",
+        message: options.sensitiveResponse
+          ? "The credential server returned an invalid response."
+          : redact(`Server returned non-JSON content: ${text.slice(0, 200)}`),
+      };
       if (response.ok) return { internalError: { ...invalid, error: "internal" } };
       data = invalid;
     }
   }
+  if (options.sensitiveResponse && !response.ok) {
+    data = options.allowAgentSelection && response.status === 400 && safeAgentSelection(data)
+      || { error: "credential_request_failed", message: `Credential request failed (HTTP ${response.status}).` };
+  }
   // Keep successful credential responses intact in memory; every output/error boundary redacts.
-  return { data, headers: response.headers, ok: response.ok, status: response.status, text: redact(text) };
+  return { data, headers: response.headers, ok: response.ok, status: response.status, text: options.sensitiveResponse ? "" : redact(text) };
 }
 
 export async function request(base, pathname, options = {}) {

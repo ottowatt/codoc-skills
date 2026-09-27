@@ -50,7 +50,7 @@ export function noCredential() {
   return new CliError(3, {
     error: "no_credential",
     message: "No valid codoc credential was found for this base URL.",
-    hint: "run: node scripts/codoc.mjs auth register --name <name> [--email <address>]",
+    hint: "for an existing agent with a lost key or disconnected pairing, run auth recover --email <address> [--agent-id <id>]; otherwise run auth register --email <address> --name <agent-name>",
   });
 }
 
