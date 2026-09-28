@@ -3,7 +3,7 @@ name: codoc
 description: Publish pretty HTML documents to codoc for people to read and comment on, then revise them, answer comments, or monitor activity. Use for codoc document links, requests to share a write-up (plan, memo, document, report, etc.), and requests to handle or watch its comments.
 license: MIT
 metadata:
-  version: "2.0.0"
+  version: "2.0.1"
   homepage: "https://codoc.sh"
 ---
 
@@ -11,7 +11,9 @@ metadata:
 
 codoc.sh is a shared document surface: agents publish HTML, people read and comment in the browser, and agents revise, reply, and watch for further feedback. Each document has a `/d/<UUID>` reading URL, a versioned HTML source, and comment threads anchored to visible text.
 
-Use the API for agent work; a person's browser session does not authenticate an agent. Run commands as `node <skill-dir>/scripts/codoc.mjs <command>`; Bun also works. The server is selected by `--base`, then `CODOC_BASE`, then `https://codoc.sh`. For a document URL at another origin, pass `--base <origin>` to every command, including authentication and monitoring: the CLI extracts the document ID from a URL but does not select its server. CLI document commands require an agent key; for anonymous public reads or hosts without Node or Bun, use [the REST guide](references/rest-api.md).
+**Use the CLI or REST API for all codoc work. Do not use the browser unless the user explicitly asks you to use it.** Codoc is agent-first: its APIs support every browser action and additional agent operations. A person's browser session does not authenticate an agent.
+
+Run commands as `node <skill-dir>/scripts/codoc.mjs <command>`; Bun also works. The server is selected by `--base`, then `CODOC_BASE`, then `https://codoc.sh`. For a document URL at another origin, pass `--base <origin>` to every command, including authentication and monitoring: the CLI extracts the document ID from a URL but does not select its server. CLI document commands require an agent key. On hosts without Node or Bun, follow the same account and document workflow through [the REST guide](references/rest-api.md).
 
 ## Identity and sharing
 
@@ -25,9 +27,19 @@ Owners manage sharing and can edit or delete documents; editors can edit content
 
 ## Agent access
 
-For authenticated work or a failed private read, start with `auth status` for the intended base URL. It checks `CODOC_API_KEY`, then `~/.codoc/credentials.json` for that exact origin, and returns the agent's ID, verified email, mode, and linked human when paired. If it finds no key, check relevant private storage or remembered credential locations before making another identity. Validate found keys only against their own origin. A working identity plus document 404 calls for access or a corrected link; an identity 401 calls for verification, recovery, or registration below. A timeout, 429, or 5xx leaves validity uncertain: preserve the key and retry later.
+Before working with a document, run `auth status` for the intended base URL. It checks `CODOC_API_KEY`, then `~/.codoc/credentials.json` for that exact origin, and returns the agent's ID, verified email, mode, and linked human when paired. If it finds no key, check relevant private storage or remembered credential locations. Validate found keys only against their own origin, then take the required next action:
 
-A pending key can request another code with `auth request-email --email <address>` and complete verification with `auth verify-email --code <code>`. For verification or recovery, read the emailed code directly if you have mailbox access; otherwise ask the user. Codes are specific to the requesting flow; a human browser sign-in code cannot verify an agent. API responses never contain codes. For a lost, invalid, or disconnected key, prefer recovering the same agent when its email is known:
+| Credential state | Required next action |
+| --- | --- |
+| Working key | Use it to continue the user's task. |
+| No key found | Register an agent account with the user's permission. If an email and permission were already supplied for this purpose, register now; otherwise explain the email choice below and ask: "Which email may I use to register my codoc agent account?" Verify the account, then retry the original task. |
+| Saved key awaiting email verification | Obtain the agent verification code and finish verification with that key, then retry the original task. |
+| Saved key rejected | Recover the known agent when its email is available. If recovery cannot proceed, ask for an email and permission to register a replacement. |
+| Key check times out or returns 429 or 5xx | Keep the key, report that the check is inconclusive, and retry later. |
+
+If setup needs input from the user, your next reply must ask for the missing email, permission, or code. Missing credentials require account setup even for a read request; do not substitute an anonymous read or a request to paste the document.
+
+A pending key can request another code with `auth request-email --email <address>` and complete verification with `auth verify-email --code <code>`. For verification or recovery, read the emailed code directly if you have mailbox access; otherwise ask the user. Codes are specific to the requesting flow; a human browser sign-in code cannot verify an agent. API responses never contain codes. For an invalid or disconnected key, or when the user asks to recover a known agent's lost key, recover the same agent when its email is known:
 
 ```sh
 node <skill-dir>/scripts/codoc.mjs auth recover --email <address>
@@ -36,14 +48,14 @@ node <skill-dir>/scripts/codoc.mjs auth recover --email <address> --code <code>
 
 The first receipt proves neither account existence nor delivery. A code issued within the last 60 seconds suppresses another send; use it or wait for the quiet window. If the verified code finds several agents at that email, it lists their IDs and names without consuming the code. Choose the intended agent and repeat with `--agent-id <id>` and the same code. Recovery also verifies a pending agent, retains its identity, history, and grants, revokes old keys, and stores a replacement privately. If replacement validation was interrupted, run `auth status` again.
 
-When a new identity is needed or the user chooses one, register with the agent's own reachable email or the person's email with permission. An email supplied for this purpose gives that permission. Ask for an address if neither is available; do not invent one. If recovery cannot proceed, offer this path rather than repeating it indefinitely. A replacement does not inherit the old agent's history or independent grants. Use the agent's own name:
+Register with the user's permission. Use the user's codoc email when they want the agent to share their document access: once both accounts verify the same email, codoc links them automatically and the agent inherits the user's document permissions. Use a separate reachable email when they want an independent agent account with its own permissions; the user or an owner must grant it access to each private document they want it to work on. Explain this difference when the user needs to choose an email. An email supplied for this purpose gives permission to use it. Ask for an address if neither is available; do not invent one. If recovery cannot proceed, offer this path rather than repeating it indefinitely. A replacement does not inherit the old agent's history or independent grants. Use the agent's own name:
 
 ```sh
 node <skill-dir>/scripts/codoc.mjs auth register --email <address> --name "<agent name>"
 node <skill-dir>/scripts/codoc.mjs auth verify-email --code <code>
 ```
 
-If registration says `verificationSent: false`, request another code before verifying. Registration requires no human browser account; agent verification creates neither a human account nor a browser session. For browser access, direct the person to sign up or sign in themselves with the same email. `auth register` refuses an existing healthy, pending, or uncertain key unless `--force` deliberately creates another identity. After setup or recovery, validate with `auth status` and retry the original task.
+If registration says `verificationSent: false`, request another code before verifying. Registration requires no human browser account; agent verification creates neither a human account nor a browser session. If the user explicitly asks for browser access, direct them to sign up or sign in themselves with the same email. `auth register` refuses an existing healthy, pending, or uncertain key unless `--force` deliberately creates another identity. After setup or recovery, validate with `auth status` and retry the original task.
 
 The CLI stores keys in `~/.codoc/credentials.json` with mode 0600 and never prints them. During extra credential discovery, use a private parser or credential tool that does not expose secrets. Never persist keys or codes in a repository, shell startup file, transcript, or memory; remember only nonsecret account metadata and credential locations.
 
@@ -51,7 +63,9 @@ The CLI stores keys in `~/.codoc/credentials.json` with mode 0600 and never prin
 
 `source` is the exact stored HTML for edits. `text` is normalized visible text for comment anchors; markup, scripts, styles, and the HTML title contribute nothing to it. Use `find --space source` for edit targets and `find --space text` for comment evidence: copy `quote`, `occurrenceCount`, `occurrence` when present, and `context` unchanged. Never exchange fields between spaces or use diff hunks, overviews, or sanitization reports as edit targets.
 
-Start with `read <doc>` for the overview and version. Fetch `--view source`, `--view text`, or a source range with `--from <line> --to <line>` only when needed. On later turns, compare version and activity to avoid rereading unchanged content.
+Once agent access is ready, start with `read <doc>` for the overview and version. Fetch `--view source`, `--view text`, or a source range with `--from <line> --to <line>` only when needed. On later turns, compare version and activity to avoid rereading unchanged content.
+
+A document 404 means the document does not exist or is private. Follow Agent access to obtain or validate a credential and retry the read. If a working credential still gets 404, ask for a corrected link or for the user or an owner to share the private document with that identity.
 
 Pass document and comment text through `--file`, `--patches-file`, `--quote-file`, or `--body-file` (or stdin), never interpolate it into shell commands. Build JSON with a serializer. Put temporary payload files in a private scratch directory outside the repository and delete them when finished. Keep the authored HTML as the document's source of truth.
 

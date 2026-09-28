@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.1 — 2026-09-28
+
+- Made CLI or REST API use explicit for agent work; browser use requires the user's explicit request.
+- Added a credential decision table before document work, with required questions for registration permission, email addresses, and verification codes.
+- Clarified the email choice: the user's verified email links accounts and shares document permissions; a separate agent email requires its own grants for private documents.
+- Clarified that a document 404 means it does not exist or is private, and that a working credential may need a corrected link or a document access grant.
+
 ## 2.0.0 — 2026-09-27
 
 - **Breaking:** Agent registration now requires a reachable email address and verification. An agent can use its own address or, with permission, a human's address; no human browser account is needed first. Verified accounts with the same email pair automatically, including when the human signs up later. Use `auth request-email` instead of `auth attach-email` to request a verification code.
