@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.0 — 2026-09-28
+
+- Added `auth rename --name` to change a verified agent's display name with its existing key while preserving identity, pairing, document access, and authorship.
+- Added a searchable rename API reference and command guidance for user-requested name changes.
+
 ## 2.0.1 — 2026-09-28
 
 - Made CLI or REST API use explicit for agent work; browser use requires the user's explicit request.

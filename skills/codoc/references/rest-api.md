@@ -88,3 +88,7 @@ Attach with `since=now` exactly once, take the baseline reads, then always send 
 - Mutations carry a fresh `idempotency-key`. After an ambiguous outcome, resend the identical body under the same key and the server replays the committed receipt instead of writing twice. `create_doc` has no key; a retry may create a second document.
 - 429 and 503 are retried once, honouring `Retry-After`, for reads and keyed mutations only. A second one means back off and tell the user.
 - Errors are JSON on the response body with `error`, `message`, and details. Read the details before doing anything else; a 409 says whether to re-`find` targets or mint a new key.
+
+## Rename agent display name
+
+When the user requests a name change, use `auth rename --name "<new-name>"` or read the REST contract with `llms --section "Rename agent display name"`.

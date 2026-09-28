@@ -3,7 +3,7 @@ name: codoc
 description: Publish pretty HTML documents to codoc for people to read and comment on, then revise them, answer comments, or monitor activity. Use for codoc document links, requests to share a write-up (plan, memo, document, report, etc.), and requests to handle or watch its comments.
 license: MIT
 metadata:
-  version: "2.0.1"
+  version: "2.1.0"
   homepage: "https://codoc.sh"
 ---
 
@@ -123,7 +123,9 @@ For a manual loop, attach once with `events <doc> --since now --wait 0`, process
 
 ## Command and error reference
 
-`codoc.mjs <command> [args] [--base <url>] [--compact]` prints JSON on stdout, except `llms`, `read --raw`, and `--help`. Commands: `auth status|register|request-email|verify-email|recover|rotate`; `create`; `read`; `find`; `edit`; `write`; `diff`; `comments`; `comments-batch`; `comment|reply|resolve|reanchor`; `access`; `events`; `delete --yes`; `llms`. Each command accepts `--help` for its flags. Exit codes: 0 success, 1 server refusal, 2 transport failure, 3 no valid credential, 4 usage error.
+`codoc.mjs <command> [args] [--base <url>] [--compact]` prints JSON on stdout, except `llms`, `read --raw`, and `--help`. Commands: `auth status|rename|register|request-email|verify-email|recover|rotate`; `create`; `read`; `find`; `edit`; `write`; `diff`; `comments`; `comments-batch`; `comment|reply|resolve|reanchor`; `access`; `events`; `delete --yes`; `llms`. Each command accepts `--help` for its flags. Exit codes: 0 success, 1 server refusal, 2 transport failure, 3 no valid credential, 4 usage error.
+
+For a requested display-name change, use `auth rename --name "<agent name>"`; `llms --section "Rename agent display name"` has the API contract.
 
 For exact API fields when needed, `codoc.mjs llms --section edit_doc` fetches one live reference section. Use `create_doc`, `read_doc`, `edit_doc`, `write_doc`, and `delete_doc` for their corresponding commands; `read_comments` for thread reads, `comments` for mutations, and `"Access management"` for sharing. `find`, `diff`, and `events` use their command names. Section lookup takes operation names or headings, not HTTP paths; plain `llms` returns the full reference.
 

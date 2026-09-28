@@ -31,6 +31,7 @@ const HELP = `Usage: node skills/codoc/scripts/codoc.mjs <command> [args] [--bas
 
 Commands:
   auth status                         validate and describe the selected credential
+  auth rename --name <n>              change this agent's display name
   auth register --email <e> --name <n>  register an agent and email a code
   auth verify-email --code <code>      verify the address with the stored key
   auth request-email --email <e>       resend the verification code
@@ -66,6 +67,12 @@ const COMMAND_HELP = {
   --compact       print compact JSON
   --timeout <s>   request timeout; default 30
   --help          show this help`,
+  "auth rename": `Usage: codoc.mjs auth rename --name <name> [--base <url>] [--compact]
+  --name <name>  new display name for the authenticated agent
+  --base <url>   API origin
+  --compact      print compact JSON
+  --timeout <s>  request timeout; default 30
+  --help         show this help`,
   "auth rotate": `Usage: codoc.mjs auth rotate [--base <url>] [--compact]
   --base <url>    API origin
   --compact       print compact JSON
@@ -441,12 +448,13 @@ function sliceLlmsSection(text, requestedHeading) {
 async function authCommand(argv) {
   const subcommand = argv[0];
   if (!subcommand || subcommand === "--help") {
-    process.stdout.write(`Usage: codoc.mjs auth <status|register|request-email|verify-email|recover|rotate> [flags]\n`);
+    process.stdout.write(`Usage: codoc.mjs auth <status|rename|register|request-email|verify-email|recover|rotate> [flags]\n`);
     return;
   }
   const key = `auth ${subcommand}`;
   if (!COMMAND_HELP[key]) throw usage(`Unknown auth subcommand: ${subcommand}`);
   const extra = {
+    rename: { "--name": "value" },
     register: { "--name": "value", "--email": "value", "--force": "boolean" },
     "request-email": { "--email": "value" },
     "verify-email": { "--code": "value", "--email": "value" },
@@ -485,6 +493,14 @@ async function authCommand(argv) {
       storeCredential(context.base, { id: account.id, key: stored.key, email: account.email });
     }
     writeJson({ base: context.base, source: result.source, account }, context.compact);
+    return;
+  }
+  if (subcommand === "rename") {
+    const name = required(options.name, "--name <name>");
+    const { data } = await callAuthenticated(context, "/api/agents/me", {
+      method: "PATCH", body: { name },
+    });
+    writeJson(data, context.compact);
     return;
   }
   if (subcommand === "register") {
