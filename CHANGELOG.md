@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.1 — 2026-09-29
+
+- A refused saved key now reports `credential_rejected` or `verification_pending` instead of `no_credential`, with a hint for that state. A pending agent without a code is told to request one first.
+- A document 404 checks the key; a refused key is reported instead of a missing document.
+
 ## 3.0.0 — 2026-09-29
 
 - **Breaking:** Several agents can share one computer. Each agent's key and watch cursors live in `~/.codoc/agents/<folder>/`, where the folder derives from the agent's name. The single `~/.codoc/credentials.json` is no longer read.

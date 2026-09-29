@@ -19,7 +19,7 @@ import {
 } from "./lib/credentials.mjs";
 import { parseDocumentId } from "./lib/doc-id.mjs";
 import { authenticatedRequest, request, requireOk, unexpectedFailure } from "./lib/http.mjs";
-import { CliError, installPipeHygiene, redact, usage, writeJson } from "./lib/output.mjs";
+import { CliError, credentialRefused, diagnostic, installPipeHygiene, redact, usage, writeJson } from "./lib/output.mjs";
 import { normalizeBaseUrl, queryPath } from "./lib/url.mjs";
 
 installPipeHygiene();
@@ -309,8 +309,22 @@ function statusOutput(context, via, account) {
   return { base: context.base, ...agentField(context.source), source: via, account };
 }
 
-function verificationPending(source) {
-  return new CliError(3, { error: "verification_pending", message: "The agent's email is not verified yet.", hint: `run auth verify-email${agentFlag(source)} --code <code>` });
+// The saved pending flag covers servers that do not yet say verificationPending on a refusal.
+function refusalContext(context) {
+  return { agent: context.source.agent, pendingVerification: Boolean(storedCredential(context.base, context.source)?.pendingVerification) };
+}
+
+// Private documents answer 404 to a refused key, so check the key before blaming the document.
+async function refuseIfKeyRejected(context, key) {
+  let check;
+  try { check = await request(context.base, "/api/agents/me", { key, timeoutSeconds: context.timeoutSeconds }); }
+  catch (error) {
+    diagnostic(`Could not check the agent key after a 404: ${error.message}`);
+    return;
+  }
+  if (check.status !== 401) return;
+  const { agent, pendingVerification } = refusalContext(context);
+  throw credentialRefused({ agent, pending: pendingVerification || check.data?.verificationPending === true });
 }
 
 function parseJsonInput(filename, description) {
@@ -378,17 +392,11 @@ function resolveTextSources(options, sources) {
 }
 
 async function callAuthenticated(context, pathname, options = {}) {
-  let result;
-  try { result = await authenticatedRequest(
-    context.base,
-    credentialCandidates(context.base, context.source),
-    pathname,
-    { ...options, timeoutSeconds: context.timeoutSeconds },
-  ); } catch (error) {
-    if (error instanceof CliError && error.exitCode === 3 && storedCredential(context.base, context.source)?.pendingVerification) {
-      throw verificationPending(context.source);
-    }
-    throw error;
+  const candidates = credentialCandidates(context.base, context.source);
+  const result = await authenticatedRequest(context.base, candidates, pathname,
+    { ...options, ...refusalContext(context), timeoutSeconds: context.timeoutSeconds });
+  if (result.status === 404 && pathname.startsWith("/api/document/")) {
+    await refuseIfKeyRejected(context, candidates[result.candidateIndex].key);
   }
   return { data: requireOk(result), source: result.source };
 }
@@ -548,19 +556,9 @@ async function authCommand(argv) {
       writeJson(statusOutput(context, "file", resumed.account), context.compact);
       return;
     }
-    let result;
     const candidates = credentialCandidates(context.base, context.source);
-    try { result = await authenticatedRequest(
-      context.base,
-      candidates,
-      "/api/agents/me",
-      { timeoutSeconds: context.timeoutSeconds },
-    ); } catch (error) {
-      if (error instanceof CliError && error.exitCode === 3 && storedCredential(context.base, context.source)?.pendingVerification) {
-        throw verificationPending(context.source);
-      }
-      throw error;
-    }
+    const result = await authenticatedRequest(context.base, candidates, "/api/agents/me",
+      { ...refusalContext(context), timeoutSeconds: context.timeoutSeconds });
     const account = requireOk(result);
     const stored = storedCredential(context.base, context.source);
     if (stored?.key && candidates[result.candidateIndex]?.key === stored.key &&
@@ -605,7 +603,7 @@ async function authCommand(argv) {
     const result = await authenticatedRequest(context.base, candidates, "/api/agents/email/verify", {
       method: "POST",
       body: { code: required(options.code, "--code <code>"), ...(options.email ? { email: options.email } : {}) },
-      timeoutSeconds: context.timeoutSeconds, sensitiveResponse: true,
+      ...refusalContext(context), timeoutSeconds: context.timeoutSeconds, sensitiveResponse: true,
     });
     const receipt = requireOk(result);
     const stored = storedCredential(context.base, context.source);
@@ -618,7 +616,7 @@ async function authCommand(argv) {
   if (subcommand === "request-email") {
     const result = await authenticatedRequest(context.base, credentialCandidates(context.base, context.source), "/api/agents/email", {
       method: "POST", body: { email: required(options.email, "--email <address>") },
-      timeoutSeconds: context.timeoutSeconds, sensitiveResponse: true,
+      ...refusalContext(context), timeoutSeconds: context.timeoutSeconds, sensitiveResponse: true,
     });
     requireOk(result);
     writeJson({ sent: true, next: `auth verify-email${agentFlag(context.source)} --code <code>` }, context.compact);

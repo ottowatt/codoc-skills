@@ -13,6 +13,7 @@ import { parseDocumentId } from "./lib/doc-id.mjs";
 import { requestOnce, retryAfterMilliseconds } from "./lib/http.mjs";
 import {
   CliError,
+  credentialRefused,
   diagnostic,
   internalFailure,
   installPipeHygiene,
@@ -184,7 +185,9 @@ async function runWatcher(options) {
       }
       unauthorized = result;
     }
-    throw new WatchExit(3, unauthorized.data);
+    throw new WatchExit(3, credentialRefused({
+      agent: options.source.agent, pending: unauthorized.data?.verificationPending === true,
+    }).value);
   }
 
   async function resilientRequest(pathname, requestOptions = {}, { allowStale = false } = {}) {

@@ -54,6 +54,23 @@ export function noCredential() {
   });
 }
 
+// A saved key the server refused is not a missing key: the way out depends on why it was refused.
+export function credentialRefused({ agent, pending }) {
+  const flag = ` --agent ${agent ?? "<name>"}`;
+  if (pending) {
+    return new CliError(3, {
+      error: "verification_pending",
+      message: "The agent's email is not verified yet.",
+      hint: `run auth verify-email${flag} --code <code>; with no code yet, first run auth request-email${flag} --email <address>`,
+    });
+  }
+  return new CliError(3, {
+    error: "credential_rejected",
+    message: "The server rejected this agent's saved key: it is invalid, disconnected, or replaced.",
+    hint: `recover this agent with auth recover${flag} --email <address> [--agent-id <id>]; if its email is unknown, register a new agent with auth register --email <address> --name <agent-name>`,
+  });
+}
+
 export function internalFailure(error) {
   return {
     error: "internal",

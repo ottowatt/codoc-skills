@@ -1,6 +1,6 @@
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { CliError, internalFailure, noCredential, redact } from "./output.mjs";
+import { CliError, credentialRefused, internalFailure, noCredential, redact } from "./output.mjs";
 
 function retryDelayOverride(milliseconds) {
   const override = Number(process.env.CODOC_TEST_RETRY_DELAY_MS);
@@ -121,14 +121,18 @@ export async function request(base, pathname, options = {}) {
   }
 }
 
+// `agent` and `pendingVerification` only shape the refusal when every candidate key is refused.
 export async function authenticatedRequest(base, candidates, pathname, options = {}) {
+  const { agent, pendingVerification, ...requestOptions } = options;
   if (candidates.length === 0) throw noCredential();
+  let refused;
   for (let index = 0; index < candidates.length; index += 1) {
     const candidate = candidates[index];
-    const result = await request(base, pathname, { ...options, key: candidate.key });
+    const result = await request(base, pathname, { ...requestOptions, key: candidate.key });
     if (result.status !== 401) return { ...result, source: candidate.source, candidateIndex: index };
+    refused = result;
   }
-  throw noCredential();
+  throw credentialRefused({ agent, pending: pendingVerification || refused.data?.verificationPending === true });
 }
 
 export function requireOk(result) {

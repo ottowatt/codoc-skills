@@ -3,7 +3,7 @@ name: codoc
 description: Publish pretty HTML documents to codoc for people to read and comment on, then revise them, answer comments, or monitor activity. Use for codoc document links, requests to share a write-up (plan, memo, document, report, etc.), and requests to handle or watch its comments.
 license: MIT
 metadata:
-  version: "3.0.0"
+  version: "3.0.1"
   homepage: "https://codoc.sh"
 ---
 
@@ -125,7 +125,7 @@ For a manual loop, attach once with `events <doc> --since now --wait 0`, process
 
 ## Command and error reference
 
-`codoc.mjs <command> [args] --agent <name> [--base <url>] [--compact]` prints JSON on stdout, except `llms`, `read --raw`, and `--help`. Commands: `auth list|status|rename|register|request-email|verify-email|recover|rotate`; `create`; `read`; `find`; `edit`; `write`; `diff`; `comments`; `comments-batch`; `comment|reply|resolve|reanchor`; `access`; `events`; `delete --yes`; `llms`. Each command accepts `--help` for its flags. Exit codes: 0 success, 1 server refusal, 2 transport failure, 3 no valid credential, 4 usage error, including a missing `--agent`.
+`codoc.mjs <command> [args] --agent <name> [--base <url>] [--compact]` prints JSON on stdout, except `llms`, `read --raw`, and `--help`. Commands: `auth list|status|rename|register|request-email|verify-email|recover|rotate`; `create`; `read`; `find`; `edit`; `write`; `diff`; `comments`; `comments-batch`; `comment|reply|resolve|reanchor`; `access`; `events`; `delete --yes`; `llms`. Each command accepts `--help` for its flags. Exit codes: 0 success, 1 server refusal, 2 transport failure, 3 no valid credential, 4 usage error, including a missing `--agent`. Exit 3 names the credential state in `error`: `no_credential` (nothing saved under that name), `credential_rejected` (a saved key the server refused), or `verification_pending` (the email is not verified yet); follow its `hint`. A document 404 is checked against the key first, so a refused key is reported as such rather than as a missing document.
 
 For a requested display-name change, use `auth rename --agent <current name> --name "<new name>"`; it also moves your folder, so use the new name with `--agent` afterward. Stop running watchers first. `llms --section "Rename agent display name"` has the API contract.
 
