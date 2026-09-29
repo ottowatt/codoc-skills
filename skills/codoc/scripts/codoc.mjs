@@ -2,15 +2,20 @@
 
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 
 import { parseArgs, required, integer, oneOf, noExtraPositionals } from "./lib/args.mjs";
 import {
+  agentHome,
   credentialCandidates,
-  fileCredential,
+  credentialSource,
+  listAgents,
   readCredentialStore,
   rewriteCredentialStore,
   storeCredential,
+  storedCredential,
   storePendingCredential,
+  writeCredentialStore,
 } from "./lib/credentials.mjs";
 import { parseDocumentId } from "./lib/doc-id.mjs";
 import { authenticatedRequest, request, requireOk, unexpectedFailure } from "./lib/http.mjs";
@@ -27,12 +32,13 @@ const COMMON_FLAGS = {
   "--help": "boolean",
 };
 
-const HELP = `Usage: node skills/codoc/scripts/codoc.mjs <command> [args] [--base <url>] [--compact]
+const HELP = `Usage: node skills/codoc/scripts/codoc.mjs <command> [args] --agent <name> [--base <url>] [--compact]
 
 Commands:
+  auth list                           list saved agents without keys
   auth status                         validate and describe the selected credential
-  auth rename --name <n>              change this agent's display name
-  auth register --email <e> --name <n>  register an agent and email a code
+  auth rename --name <n>              change this agent's display name and folder
+  auth register --email <e> --name <n>  register an agent, save it under its name, and email a code
   auth verify-email --code <code>      verify the address with the stored key
   auth request-email --email <e>       resend the verification code
   auth recover --email <e> [--agent-id <id>] [--code <code>] recover an agent key
@@ -55,6 +61,7 @@ Commands:
   llms [--section <name>]              print the live API reference or one operation block
 
 Global flags:
+  --agent <name>     the acting agent's name; required unless CODOC_API_KEY is set
   --base <url>       API origin; CODOC_BASE or https://codoc.sh by default
   --compact          print JSON on one line
   --timeout <s>      request timeout in seconds; default 30
@@ -62,38 +69,48 @@ Global flags:
   --flag=value       use this form when a value begins with --`;
 
 const COMMAND_HELP = {
-  "auth status": `Usage: codoc.mjs auth status [--base <url>] [--compact] [--timeout <s>]
+  "auth list": `Usage: codoc.mjs auth list [--base <url>] [--compact]
+  Lists saved agents with their IDs, names, emails, and origins, never their keys.
+  --base <url>    only agents with a credential for this origin
+  --compact       print compact JSON
+  --help          show this help`,
+  "auth status": `Usage: codoc.mjs auth status --agent <name> [--base <url>] [--compact] [--timeout <s>]
+  --agent <name>  the agent to check
   --base <url>    select the exact credential-store entry
   --compact       print compact JSON
   --timeout <s>   request timeout; default 30
   --help          show this help`,
-  "auth rename": `Usage: codoc.mjs auth rename --name <name> [--base <url>] [--compact]
+  "auth rename": `Usage: codoc.mjs auth rename --agent <name> --name <new-name> [--base <url>] [--compact]
+  --agent <name> the agent to rename; its folder moves to match the new name
   --name <name>  new display name for the authenticated agent
   --base <url>   API origin
   --compact      print compact JSON
   --timeout <s>  request timeout; default 30
   --help         show this help`,
-  "auth rotate": `Usage: codoc.mjs auth rotate [--base <url>] [--compact]
+  "auth rotate": `Usage: codoc.mjs auth rotate --agent <name> [--base <url>] [--compact]
+  --agent <name>  the agent whose key is rotated and saved
   --base <url>    API origin
   --compact       print compact JSON
   --timeout <s>   request timeout; default 30
   --help          show this help`,
-  "auth register": `Usage: codoc.mjs auth register --email <address> --name <name> [--force]
+  "auth register": `Usage: codoc.mjs auth register --email <address> --name <name>
   --email <address>    email address used to verify and recover this agent
-  --name <name>        agent name
-  --force              deliberately create another identity despite a stored credential
+  --name <name>        agent name; the key is saved in the agent folder derived from it
   --base <url>         API origin
   --help               show this help`,
-  "auth verify-email": `Usage: codoc.mjs auth verify-email --code <code> [--email <address>]
+  "auth verify-email": `Usage: codoc.mjs auth verify-email --agent <name> --code <code> [--email <address>]
+  --agent <name>      the registered agent
   --code <code>       six-digit code sent to the registration email
   --email <address>   address used at registration, if needed
   --base <url>        API origin
   --help              show this help`,
-  "auth request-email": `Usage: codoc.mjs auth request-email --email <address>
+  "auth request-email": `Usage: codoc.mjs auth request-email --agent <name> --email <address>
+  --agent <name>     the registered agent
   --email <address>  registration email
   --base <url>       API origin
   --help             show this help`,
-  "auth recover": `Usage: codoc.mjs auth recover --email <address> [--agent-id <id>] [--code <code>]
+  "auth recover": `Usage: codoc.mjs auth recover --agent <name> --email <address> [--agent-id <id>] [--code <code>]
+  --agent <name>     the agent folder that receives the replacement key
   --email <address>  agent's verified email
   --agent-id <id>    select the existing agent identity when needed
   --code <code>      six-digit recovery code; omit to request one
@@ -267,8 +284,33 @@ function baseAndOutput(options) {
   return { base, compact: Boolean(options.compact), timeoutSeconds };
 }
 
+const AGENT_FLAG_HELP = "  --agent <name>  acting agent; required unless CODOC_API_KEY is set";
+// Registration names the agent with --name, and these commands act as no agent.
+const WITHOUT_AGENT = new Set(["auth register", "auth list", "llms"]);
+
+function flagsFor(command, extra) {
+  return { ...COMMON_FLAGS, ...(WITHOUT_AGENT.has(command) ? {} : { "--agent": "value" }), ...extra };
+}
+
 function showHelp(name) {
-  process.stdout.write(`${COMMAND_HELP[name] ?? HELP}\n`);
+  const agentLine = COMMAND_HELP[name] && name !== "llms" && !name.startsWith("auth ") ? `${AGENT_FLAG_HELP}\n` : "";
+  process.stdout.write(`${COMMAND_HELP[name] ?? HELP}\n${agentLine}`);
+}
+
+function agentFlag(source) {
+  return source.agent ? ` --agent ${source.agent}` : "";
+}
+
+function agentField(source) {
+  return source.agent ? { agent: source.agent } : {};
+}
+
+function statusOutput(context, via, account) {
+  return { base: context.base, ...agentField(context.source), source: via, account };
+}
+
+function verificationPending(source) {
+  return new CliError(3, { error: "verification_pending", message: "The agent's email is not verified yet.", hint: `run auth verify-email${agentFlag(source)} --code <code>` });
 }
 
 function parseJsonInput(filename, description) {
@@ -339,12 +381,12 @@ async function callAuthenticated(context, pathname, options = {}) {
   let result;
   try { result = await authenticatedRequest(
     context.base,
-    credentialCandidates(context.base),
+    credentialCandidates(context.base, context.source),
     pathname,
     { ...options, timeoutSeconds: context.timeoutSeconds },
   ); } catch (error) {
-    if (error instanceof CliError && error.exitCode === 3 && readCredentialStore()[context.base]?.pendingVerification) {
-      throw new CliError(3, { error: "verification_pending", message: "The agent's email is not verified yet.", hint: "run auth verify-email --code <code>" });
+    if (error instanceof CliError && error.exitCode === 3 && storedCredential(context.base, context.source)?.pendingVerification) {
+      throw verificationPending(context.source);
     }
     throw error;
   }
@@ -367,7 +409,7 @@ async function keyedCall(idempotencyKey, operation) {
 }
 
 async function finalizePendingCredential(context) {
-  const pending = readCredentialStore()[context.base]?.pendingCredential;
+  const pending = storedCredential(context.base, context.source)?.pendingCredential;
   if (!pending) return null;
   if (typeof pending.key !== "string" || !pending.key.startsWith("sk_agent_")) {
     throw new CliError(1, { error: "pending_credential_invalid", message: "The saved replacement key is malformed. Existing credentials were preserved." });
@@ -394,7 +436,7 @@ async function finalizePendingCredential(context) {
     throw new CliError(1, { error: "recovery_identity_mismatch", message: "The replacement key belongs to a different agent. Existing credentials were preserved." });
   }
   const storedIn = storeCredential(context.base, { id: account.id, key: pending.key,
-    email: account.email });
+    email: account.email, name: account.name }, context.source.home);
   return { account, storedIn };
 }
 
@@ -448,75 +490,39 @@ function sliceLlmsSection(text, requestedHeading) {
 async function authCommand(argv) {
   const subcommand = argv[0];
   if (!subcommand || subcommand === "--help") {
-    process.stdout.write(`Usage: codoc.mjs auth <status|rename|register|request-email|verify-email|recover|rotate> [flags]\n`);
+    process.stdout.write(`Usage: codoc.mjs auth <list|status|rename|register|request-email|verify-email|recover|rotate> [flags]\n`);
     return;
   }
   const key = `auth ${subcommand}`;
   if (!COMMAND_HELP[key]) throw usage(`Unknown auth subcommand: ${subcommand}`);
   const extra = {
     rename: { "--name": "value" },
-    register: { "--name": "value", "--email": "value", "--force": "boolean" },
+    register: { "--name": "value", "--email": "value" },
     "request-email": { "--email": "value" },
     "verify-email": { "--code": "value", "--email": "value" },
     recover: { "--email": "value", "--agent-id": "value", "--code": "value" },
   }[subcommand] ?? {};
-  const { options, positional } = parseArgs(argv.slice(1), { ...COMMON_FLAGS, ...extra });
+  const { options, positional } = parseArgs(argv.slice(1), flagsFor(key, extra));
   if (options.help) return showHelp(key);
   noExtraPositionals(positional, 0);
   const context = baseAndOutput(options);
 
-  if (subcommand === "status") {
-    const resumed = await finalizePendingCredential(context);
-    if (resumed) {
-      writeJson({ base: context.base, source: "file", account: resumed.account }, context.compact);
-      return;
-    }
-    let result;
-    const candidates = credentialCandidates(context.base);
-    try { result = await authenticatedRequest(
-      context.base,
-      candidates,
-      "/api/agents/me",
-      { timeoutSeconds: context.timeoutSeconds },
-    ); } catch (error) {
-      if (error instanceof CliError && error.exitCode === 3 && readCredentialStore()[context.base]?.pendingVerification) {
-        throw new CliError(3, { error: "verification_pending", message: "The agent's email is not verified yet.", hint: "run auth verify-email --code <code>" });
-      }
-      throw error;
-    }
-    const account = requireOk(result);
-    const stored = readCredentialStore()[context.base];
-    if (stored?.key && candidates[result.candidateIndex]?.key === stored.key &&
-        account?.kind === "agent" && typeof account.id === "string" &&
-        (stored.pendingVerification || !stored.idVerified || stored.id !== account.id ||
-          (typeof account.email === "string" && stored.email !== account.email))) {
-      storeCredential(context.base, { id: account.id, key: stored.key, email: account.email });
-    }
-    writeJson({ base: context.base, source: result.source, account }, context.compact);
-    return;
-  }
-  if (subcommand === "rename") {
-    const name = required(options.name, "--name <name>");
-    const { data } = await callAuthenticated(context, "/api/agents/me", {
-      method: "PATCH", body: { name },
-    });
-    writeJson(data, context.compact);
+  if (subcommand === "list") {
+    writeJson({ agents: listAgents(options.base === undefined ? undefined : context.base) }, context.compact);
     return;
   }
   if (subcommand === "register") {
     const email = required(options.email, "--email <address>");
     const name = required(options.name, "--name <name>");
-    if (readCredentialStore()[context.base]?.pendingVerification && !options.force) {
-      throw usage("A registration is awaiting email verification. Run auth verify-email --code <code>, or use --force to create a different identity.");
+    const source = credentialSource(name);
+    const existing = storedCredential(context.base, source);
+    if (existing?.pendingVerification) {
+      throw usage(`Agent ${source.agent} is awaiting email verification. Run auth verify-email --agent ${source.agent} --code <code>.`);
     }
-    if (!options.force) {
-      for (const candidate of credentialCandidates(context.base)) {
-        const check = await request(context.base, "/api/agents/me", { key: candidate.key, timeoutSeconds: context.timeoutSeconds });
-        if (check.ok) throw usage("A working agent key already exists for this base URL. Use auth status, or --force to deliberately register another identity.");
-        if (check.status !== 401) throw usage(`Could not confirm whether the existing agent key is valid (HTTP ${check.status}). Keep it and try again later.`);
-      }
+    if (existing) {
+      throw usage(`Agent ${source.agent} already has a credential for this base URL. Run auth status --agent ${source.agent}, or register under a different name.`);
     }
-    rewriteCredentialStore();
+    rewriteCredentialStore(source.home);
     const result = await request(context.base, "/api/agents/register", {
       method: "POST", body: { email, name },
       timeoutSeconds: context.timeoutSeconds, sensitiveResponse: true,
@@ -526,53 +532,112 @@ async function authCommand(argv) {
       throw new CliError(1, { error: "invalid_response", message: "Registration response omitted its credential fields." });
     }
     let storedIn;
-    try { storedIn = storeCredential(context.base, { id: value.id, key: value.key, email, pendingVerification: true }); }
-    catch { throw new CliError(1, { error: "credential_write_failed", message: "Registration succeeded but its key could not be saved. Repair local credential storage, then recover this agent with its registration email and agent ID if known. Do not register another identity." }); }
-    writeJson({ id: value.id, name: value.name, verificationSent: value.verificationSent, storedIn, next: value.verificationSent ? "auth verify-email --code <code>" : "auth request-email --email <registration-email>" }, context.compact);
+    try { storedIn = storeCredential(context.base, { id: value.id, key: value.key, email, name: value.name ?? name, pendingVerification: true }, source.home); }
+    catch (error) { throw new CliError(1, { error: "credential_write_failed", message: "Registration succeeded but its key could not be saved. Repair local credential storage, then recover this agent with its registration email and agent ID if known. Do not register another identity.", cause: error.value ?? redact(error.message) }); }
+    writeJson({ id: value.id, name: value.name, agent: source.agent, verificationSent: value.verificationSent, storedIn,
+      next: value.verificationSent ? `auth verify-email --agent ${source.agent} --code <code>` : `auth request-email --agent ${source.agent} --email <registration-email>` }, context.compact);
+    return;
+  }
+
+  context.source = credentialSource(options.agent);
+  const { home } = context.source;
+
+  if (subcommand === "status") {
+    const resumed = await finalizePendingCredential(context);
+    if (resumed) {
+      writeJson(statusOutput(context, "file", resumed.account), context.compact);
+      return;
+    }
+    let result;
+    const candidates = credentialCandidates(context.base, context.source);
+    try { result = await authenticatedRequest(
+      context.base,
+      candidates,
+      "/api/agents/me",
+      { timeoutSeconds: context.timeoutSeconds },
+    ); } catch (error) {
+      if (error instanceof CliError && error.exitCode === 3 && storedCredential(context.base, context.source)?.pendingVerification) {
+        throw verificationPending(context.source);
+      }
+      throw error;
+    }
+    const account = requireOk(result);
+    const stored = storedCredential(context.base, context.source);
+    if (stored?.key && candidates[result.candidateIndex]?.key === stored.key &&
+        account?.kind === "agent" && typeof account.id === "string" &&
+        (stored.pendingVerification || !stored.idVerified || stored.id !== account.id ||
+          (typeof account.email === "string" && stored.email !== account.email) ||
+          (typeof account.name === "string" && stored.name !== account.name))) {
+      storeCredential(context.base, { id: account.id, key: stored.key, email: account.email, name: account.name }, home);
+    }
+    writeJson(statusOutput(context, result.source, account), context.compact);
+    return;
+  }
+  if (subcommand === "rename") {
+    const name = required(options.name, "--name <name>");
+    const target = home ? agentHome(name) : undefined;
+    const moving = Boolean(target) && target !== home;
+    if (moving && fs.existsSync(target)) {
+      throw usage(`Another agent already uses the folder for that name (${path.basename(target)}). Choose a different name.`);
+    }
+    const { data } = await callAuthenticated(context, "/api/agents/me", {
+      method: "PATCH", body: { name },
+    });
+    if (home) {
+      // The server rename already happened; renaming again with the same name is safe and finishes the local update.
+      try {
+        const store = readCredentialStore(home);
+        if (store[context.base] && typeof data?.name === "string") {
+          store[context.base].name = data.name;
+          writeCredentialStore(store, home);
+        }
+        if (moving) fs.renameSync(home, target);
+      } catch (error) {
+        throw new CliError(1, { error: "local_rename_incomplete",
+          message: `The agent was renamed to ${JSON.stringify(data?.name ?? name)}, but its folder ${home} could not be updated: ${redact(error.message)}. Keep using --agent ${context.source.agent}, fix the cause, and run the same auth rename again to finish.` });
+      }
+    }
+    writeJson({ ...data, ...(home ? { agent: path.basename(target) } : {}) }, context.compact);
     return;
   }
   if (subcommand === "verify-email") {
-    const pending = readCredentialStore()[context.base]?.pendingVerification;
-    const candidates = pending && fileCredential(context.base)
-      ? [fileCredential(context.base)]
-      : credentialCandidates(context.base);
+    const candidates = credentialCandidates(context.base, context.source);
     const result = await authenticatedRequest(context.base, candidates, "/api/agents/email/verify", {
       method: "POST",
       body: { code: required(options.code, "--code <code>"), ...(options.email ? { email: options.email } : {}) },
       timeoutSeconds: context.timeoutSeconds, sensitiveResponse: true,
     });
     const receipt = requireOk(result);
-    const stored = readCredentialStore()[context.base];
+    const stored = storedCredential(context.base, context.source);
     if (stored?.pendingVerification && stored.id && candidates[result.candidateIndex]?.key === stored.key) {
-      storeCredential(context.base, { id: stored.id, key: stored.key, email: receipt.email ?? stored.email });
+      storeCredential(context.base, { id: stored.id, key: stored.key, email: receipt.email ?? stored.email, name: receipt.name ?? stored.name }, home);
     }
     writeJson(receipt, context.compact);
     return;
   }
   if (subcommand === "request-email") {
-    const pending = readCredentialStore()[context.base]?.pendingVerification;
-    const candidates = pending && fileCredential(context.base)
-      ? [fileCredential(context.base)]
-      : credentialCandidates(context.base);
-    const result = await authenticatedRequest(context.base, candidates, "/api/agents/email", {
+    const result = await authenticatedRequest(context.base, credentialCandidates(context.base, context.source), "/api/agents/email", {
       method: "POST", body: { email: required(options.email, "--email <address>") },
       timeoutSeconds: context.timeoutSeconds, sensitiveResponse: true,
     });
     requireOk(result);
-    writeJson({ sent: true, next: "auth verify-email --code <code>" }, context.compact);
+    writeJson({ sent: true, next: `auth verify-email${agentFlag(context.source)} --code <code>` }, context.compact);
     return;
   }
   if (subcommand === "recover") {
     const email = required(options.email, "--email <address>");
-    const stored = readCredentialStore()[context.base];
+    const stored = storedCredential(context.base, context.source);
+    if (options["agent-id"] && stored?.idVerified && stored.id !== options["agent-id"]) {
+      throw usage(`Agent ${context.source.agent} is ${stored.id}, not ${options["agent-id"]}. Recover another agent with its own --agent name.`);
+    }
     const agentId = options["agent-id"] ?? (stored?.idVerified ? stored.id : undefined);
-    if (options.code) rewriteCredentialStore();
+    if (options.code) rewriteCredentialStore(home);
     const result = await request(context.base, "/api/agents/key/recover", {
       method: "POST", body: { email, ...(agentId ? { agentId } : {}), ...(options.code ? { code: options.code } : {}) },
       timeoutSeconds: context.timeoutSeconds, sensitiveResponse: true, allowAgentSelection: Boolean(options.code),
     });
     if (result.data?.error === "agent_selection_required") {
-      throw new CliError(1, { ...result.data, hint: "rerun auth recover --email <address> --agent-id <chosen-id> --code <same-code>" });
+      throw new CliError(1, { ...result.data, hint: `rerun auth recover${agentFlag(context.source)} --email <address> --agent-id <chosen-id> --code <same-code>` });
     }
     const value = requireOk(result);
     if (!options.code) {
@@ -582,7 +647,7 @@ async function authCommand(argv) {
         ok: value.ok,
         message: value.message,
         verification: value.verification,
-        next: `auth recover --email <address>${agentId ? ` --agent-id ${agentId}` : ""} --code <code>`,
+        next: `auth recover${agentFlag(context.source)} --email <address>${agentId ? ` --agent-id ${agentId}` : ""} --code <code>`,
       }, context.compact);
       return;
     }
@@ -590,14 +655,14 @@ async function authCommand(argv) {
       throw new CliError(1, { error: "invalid_response", message: "Recovery response omitted its credential fields." });
     }
     let storedIn;
-    try { storedIn = storePendingCredential(context.base, value.key, agentId); }
-    catch { throw new CliError(1, { error: "credential_write_failed", message: "Recovery completed but the replacement key could not be saved. Request a new code and retry." }); }
+    try { storedIn = storePendingCredential(context.base, value.key, agentId, home); }
+    catch (error) { throw new CliError(1, { error: "credential_write_failed", message: "Recovery completed but the replacement key could not be saved. Request a new code and retry.", cause: error.value ?? redact(error.message) }); }
     const finalized = await finalizePendingCredential(context);
-    writeJson({ id: finalized.account.id, storedIn }, context.compact);
+    writeJson({ id: finalized.account.id, ...agentField(context.source), storedIn }, context.compact);
     return;
   }
   if (subcommand === "rotate") {
-    rewriteCredentialStore();
+    rewriteCredentialStore(home);
     const current = (await callAuthenticated(context, "/api/agents/me")).data;
     if (current?.kind !== "agent" || typeof current.id !== "string") {
       throw new CliError(1, { error: "invalid_response", message: "The current agent identity could not be verified." });
@@ -608,15 +673,16 @@ async function authCommand(argv) {
     }
     let storedIn;
     try {
-      storedIn = storePendingCredential(context.base, data.key, current.id);
+      storedIn = storePendingCredential(context.base, data.key, current.id, home);
     } catch (error) {
       throw new CliError(1, {
         error: "credential_write_failed",
         message: "The key rotated but could not be stored. Use auth recover with this agent's email to recover the identity.",
+        cause: error.value ?? redact(error.message),
       });
     }
     const finalized = await finalizePendingCredential(context);
-    writeJson({ id: finalized.account.id, storedIn }, context.compact);
+    writeJson({ id: finalized.account.id, ...agentField(context.source), storedIn }, context.compact);
   }
 }
 
@@ -650,7 +716,7 @@ async function documentCommand(command, argv) {
     delete: { "--yes": "boolean" },
     llms: { "--section": "value" },
   };
-  const { options, positional } = parseArgs(argv, { ...COMMON_FLAGS, ...specs[command] });
+  const { options, positional } = parseArgs(argv, flagsFor(command, specs[command]));
   if (options.help) return showHelp(command);
   const context = baseAndOutput(options);
 
@@ -666,6 +732,8 @@ async function documentCommand(command, argv) {
     process.stdout.write(`${text}${text.endsWith("\n") ? "" : "\n"}`);
     return;
   }
+
+  context.source = credentialSource(options.agent);
 
   if (command === "create") {
     noExtraPositionals(positional, 0);

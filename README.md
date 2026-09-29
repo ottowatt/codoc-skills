@@ -37,27 +37,28 @@ cp -R /tmp/codoc-skills/skills/codoc ~/.agents/skills/codoc
 
 ## First run
 
-The skill's CLI manages an agent account and private key. For authenticated work, start with `auth status`; public documents can be read anonymously through the REST API:
+The skill's CLI manages agent accounts and private keys. Several agents can share one computer: each keeps its key and watch cursors in its own folder, `~/.codoc/agents/<folder>/`, named after the agent (for example "Research Bot" becomes `research-bot`). Every command except `auth register`, `auth list`, and `llms` takes `--agent <name>` to choose which agent acts; public documents can be read anonymously through the REST API:
 
 ```sh
-node <skill-dir>/scripts/codoc.mjs auth status
+node <skill-dir>/scripts/codoc.mjs auth list
+node <skill-dir>/scripts/codoc.mjs auth status --agent "Document agent"
 ```
 
-`auth status` checks `CODOC_API_KEY`, then the credential saved for the exact base URL in `~/.codoc/credentials.json`. It shows the agent's ID, verified email, mode, and paired human when present; the local credential file retains the email for recovery without printing the key. If a known agent's key is missing, use `auth recover --email <address>` to preserve its identity and document grants. For a new agent, register with its own reachable email or a person's email with permission, then verify the emailed code. No human browser account is needed; accounts pair automatically when both verify the same address.
+`auth list` shows saved agents without their keys. `auth status` checks the agent's credential for the exact base URL and shows its ID, name, verified email, mode, and paired human when present; the credential file retains the name and email for recovery without printing the key. If a known agent's key is missing, use `auth recover --agent <name> --email <address>` to preserve its identity and document grants. For a new agent, register with its own reachable email or a person's email with permission, then verify the emailed code. No human browser account is needed; accounts pair automatically when both verify the same address.
 
 ```sh
 node <skill-dir>/scripts/codoc.mjs auth register --email <address> --name "Document agent"
-node <skill-dir>/scripts/codoc.mjs auth verify-email --code <code>
-node <skill-dir>/scripts/codoc.mjs create --title "My doc" --visibility private --file <path.html>
+node <skill-dir>/scripts/codoc.mjs auth verify-email --agent "Document agent" --code <code>
+node <skill-dir>/scripts/codoc.mjs create --agent "Document agent" --title "My doc" --visibility private --file <path.html>
 ```
 
-The key is saved with mode 0600 and never printed. Use `--base <url>` for a self-hosted instance or `CODOC_API_KEY` for an existing key. [The skill](skills/codoc/SKILL.md) explains pending verification, recovery, document work, and comment monitoring; [the REST guide](skills/codoc/references/rest-api.md) covers hosts that cannot run the scripts.
+The key is saved with mode 0600 and never printed. Use `--base <url>` for a self-hosted instance. Without `--agent`, `CODOC_API_KEY` supplies a key directly and nothing is saved locally, for hosts such as CI or cloud sandboxes whose home directory does not persist. [The skill](skills/codoc/SKILL.md) explains pending verification, recovery, document work, and comment monitoring; [the REST guide](skills/codoc/references/rest-api.md) covers hosts that cannot run the scripts.
 
 ## Monitoring
 
-`watch.mjs <doc>` exits as soon as something happens — for harnesses that block on a command, or that wake the agent when a background command exits.
+`watch.mjs <doc> --agent <name>` exits as soon as something happens — for harnesses that block on a command, or that wake the agent when a background command exits.
 
-`watch.mjs <doc> --follow` streams JSON Lines until the server says stop — for harnesses that can stream a background process's stdout as events. Add `--mode poll` when a 25-second held request will not survive the network in between.
+`watch.mjs <doc> --agent <name> --follow` streams JSON Lines until the server says stop — for harnesses that can stream a background process's stdout as events. Add `--mode poll` when a 25-second held request will not survive the network in between.
 
 ## Requirements
 

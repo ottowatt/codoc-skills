@@ -5,6 +5,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs, required, number, oneOf, noExtraPositionals } from "./lib/args.mjs";
 import {
   credentialCandidates,
+  credentialSource,
   readWatchState,
   writeWatchState,
 } from "./lib/credentials.mjs";
@@ -32,6 +33,7 @@ const HELP = `Usage: node skills/codoc/scripts/watch.mjs <doc> [options]
   --no-hydrate        do not fetch named comment threads
   --max-seconds <n>   stop after this many elapsed seconds
   --fresh             ignore saved cursor and perform a new attach
+  --agent <name>      acting agent; required unless CODOC_API_KEY is set
   --base <url>        API origin; CODOC_BASE or https://codoc.sh by default
   --compact           accepted for consistency; JSON Lines are always compact
   --help              show this help`;
@@ -44,6 +46,7 @@ const FLAGS = {
   "--no-hydrate": "boolean",
   "--max-seconds": "value",
   "--fresh": "boolean",
+  "--agent": "value",
   "--base": "value",
   "--compact": "boolean",
   "--help": "boolean",
@@ -65,6 +68,7 @@ function parseOptions(argv) {
   const rawBase = options.base ?? process.env.CODOC_BASE ?? "https://codoc.sh";
   return {
     base: normalizeBaseUrl(rawBase),
+    source: credentialSource(options.agent),
     documentId,
     follow: Boolean(options.follow),
     fresh: Boolean(options.fresh),
@@ -106,7 +110,7 @@ function exitCodeFor(status) {
 }
 
 async function runWatcher(options) {
-  const candidates = credentialCandidates(options.base);
+  const candidates = credentialCandidates(options.base, options.source);
   if (candidates.length === 0) throw noCredential();
   const root = `/api/document/${options.documentId}`;
   const control = new AbortController();
@@ -124,7 +128,7 @@ async function runWatcher(options) {
   process.once("SIGTERM", () => onSignal(143));
 
   const save = () => {
-    if (cursor) writeWatchState(options.base, options.documentId, cursor);
+    if (cursor) writeWatchState(options.base, options.documentId, cursor, options.source.home);
   };
   const emitExit = (reason, error) => {
     save();
@@ -292,7 +296,7 @@ async function runWatcher(options) {
 
   try {
     let page;
-    const saved = options.fresh ? undefined : readWatchState(options.base, options.documentId);
+    const saved = options.fresh ? undefined : readWatchState(options.base, options.documentId, options.source.home);
     if (saved) {
       cursor = saved.cursor;
       writeJsonLine({ type: "resume", cursor });

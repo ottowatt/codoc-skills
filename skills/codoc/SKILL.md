@@ -3,7 +3,7 @@ name: codoc
 description: Publish pretty HTML documents to codoc for people to read and comment on, then revise them, answer comments, or monitor activity. Use for codoc document links, requests to share a write-up (plan, memo, document, report, etc.), and requests to handle or watch its comments.
 license: MIT
 metadata:
-  version: "2.1.0"
+  version: "3.0.0"
   homepage: "https://codoc.sh"
 ---
 
@@ -13,7 +13,7 @@ codoc.sh is a shared document surface: agents publish HTML, people read and comm
 
 **Use the CLI or REST API for all codoc work. Do not use the browser unless the user explicitly asks you to use it.** Codoc is agent-first: its APIs support every browser action and additional agent operations. A person's browser session does not authenticate an agent.
 
-Run commands as `node <skill-dir>/scripts/codoc.mjs <command>`; Bun also works. The server is selected by `--base`, then `CODOC_BASE`, then `https://codoc.sh`. For a document URL at another origin, pass `--base <origin>` to every command, including authentication and monitoring: the CLI extracts the document ID from a URL but does not select its server. CLI document commands require an agent key. On hosts without Node or Bun, follow the same account and document workflow through [the REST guide](references/rest-api.md).
+Run commands as `node <skill-dir>/scripts/codoc.mjs <command>`; Bun also works. The server is selected by `--base`, then `CODOC_BASE`, then `https://codoc.sh`. Pass `--agent <your name>` to every command except `auth register`, `auth list`, and `llms`, including `watch.mjs`; several agents can share one computer, and the flag chooses which one acts. For a document URL at another origin, pass `--base <origin>` to every command, including authentication and monitoring: the CLI extracts the document ID from a URL but does not select its server. CLI document commands require an agent key. On hosts without Node or Bun, follow the same account and document workflow through [the REST guide](references/rest-api.md).
 
 ## Identity and sharing
 
@@ -27,7 +27,9 @@ Owners manage sharing and can edit or delete documents; editors can edit content
 
 ## Agent access
 
-Before working with a document, run `auth status` for the intended base URL. It checks `CODOC_API_KEY`, then `~/.codoc/credentials.json` for that exact origin, and returns the agent's ID, verified email, mode, and linked human when paired. If it finds no key, check relevant private storage or remembered credential locations. Validate found keys only against their own origin, then take the required next action:
+Each agent's key lives in its own folder, `~/.codoc/agents/<folder>/credentials.json`, keyed by origin. The folder name comes from the agent's name: lowercased, with each run of characters other than letters and digits turned into `-`, so "Research Bot" becomes `research-bot`. `--agent` accepts either form. `auth list` shows every saved agent's folder, ID, name, email, and origins without keys. Use your own name, with at least one letter or digit and no emoji; if you do not know it, check `auth list` and your memory rather than borrowing another agent's folder. Without `--agent`, the CLI uses a key in `CODOC_API_KEY` and saves nothing locally.
+
+Before working with a document, run `auth status --agent <your name>` for the intended base URL. It returns the agent's ID, name, verified email, mode, and linked human when paired. If it finds no key, check relevant private storage or remembered credential locations. Validate found keys only against their own origin, then take the required next action:
 
 | Credential state | Required next action |
 | --- | --- |
@@ -39,25 +41,25 @@ Before working with a document, run `auth status` for the intended base URL. It 
 
 If setup needs input from the user, your next reply must ask for the missing email, permission, or code. Missing credentials require account setup even for a read request; do not substitute an anonymous read or a request to paste the document.
 
-A pending key can request another code with `auth request-email --email <address>` and complete verification with `auth verify-email --code <code>`. For verification or recovery, read the emailed code directly if you have mailbox access; otherwise ask the user. Codes are specific to the requesting flow; a human browser sign-in code cannot verify an agent. API responses never contain codes. For an invalid or disconnected key, or when the user asks to recover a known agent's lost key, recover the same agent when its email is known:
+A pending key can request another code with `auth request-email --agent <name> --email <address>` and complete verification with `auth verify-email --agent <name> --code <code>`. For verification or recovery, read the emailed code directly if you have mailbox access; otherwise ask the user. Codes are specific to the requesting flow; a human browser sign-in code cannot verify an agent. API responses never contain codes. For an invalid or disconnected key, or when the user asks to recover a known agent's lost key, recover the same agent when its email is known:
 
 ```sh
-node <skill-dir>/scripts/codoc.mjs auth recover --email <address>
-node <skill-dir>/scripts/codoc.mjs auth recover --email <address> --code <code>
+node <skill-dir>/scripts/codoc.mjs auth recover --agent <name> --email <address>
+node <skill-dir>/scripts/codoc.mjs auth recover --agent <name> --email <address> --code <code>
 ```
 
-The first receipt proves neither account existence nor delivery. A code issued within the last 60 seconds suppresses another send; use it or wait for the quiet window. If the verified code finds several agents at that email, it lists their IDs and names without consuming the code. Choose the intended agent and repeat with `--agent-id <id>` and the same code. Recovery also verifies a pending agent, retains its identity, history, and grants, revokes old keys, and stores a replacement privately. If replacement validation was interrupted, run `auth status` again.
+The first receipt proves neither account existence nor delivery. A code issued within the last 60 seconds suppresses another send; use it or wait for the quiet window. If the verified code finds several agents at that email, it lists their IDs and names without consuming the code. Choose the intended agent and repeat with `--agent-id <id>` and the same code. Recovery also verifies a pending agent, retains its identity, history, and grants, revokes old keys, and stores a replacement privately in the `--agent` folder. If replacement validation was interrupted, run `auth status` again.
 
-Register with the user's permission. Use the user's codoc email when they want the agent to share their document access: once both accounts verify the same email, codoc links them automatically and the agent inherits the user's document permissions. Use a separate reachable email when they want an independent agent account with its own permissions; the user or an owner must grant it access to each private document they want it to work on. Explain this difference when the user needs to choose an email. An email supplied for this purpose gives permission to use it. Ask for an address if neither is available; do not invent one. If recovery cannot proceed, offer this path rather than repeating it indefinitely. A replacement does not inherit the old agent's history or independent grants. Use the agent's own name:
+Register with the user's permission. Use the user's codoc email when they want the agent to share their document access: once both accounts verify the same email, codoc links them automatically and the agent inherits the user's document permissions. Use a separate reachable email when they want an independent agent account with its own permissions; the user or an owner must grant it access to each private document they want it to work on. Explain this difference when the user needs to choose an email. An email supplied for this purpose gives permission to use it. Ask for an address if neither is available; do not invent one. If recovery cannot proceed, offer this path rather than repeating it indefinitely. A replacement does not inherit the old agent's history or independent grants. Use the agent's own name; registration saves the key in the folder for that name and prints the `--agent` value for later commands:
 
 ```sh
 node <skill-dir>/scripts/codoc.mjs auth register --email <address> --name "<agent name>"
-node <skill-dir>/scripts/codoc.mjs auth verify-email --code <code>
+node <skill-dir>/scripts/codoc.mjs auth verify-email --agent "<agent name>" --code <code>
 ```
 
-If registration says `verificationSent: false`, request another code before verifying. Registration requires no human browser account; agent verification creates neither a human account nor a browser session. If the user explicitly asks for browser access, direct them to sign up or sign in themselves with the same email. `auth register` refuses an existing healthy, pending, or uncertain key unless `--force` deliberately creates another identity. After setup or recovery, validate with `auth status` and retry the original task.
+If registration says `verificationSent: false`, request another code before verifying. Registration requires no human browser account; agent verification creates neither a human account nor a browser session. If the user explicitly asks for browser access, direct them to sign up or sign in themselves with the same email. `auth register` refuses a name whose folder already holds a key for that origin; if it is yours, use it, otherwise choose a different name. After setup or recovery, validate with `auth status` and retry the original task.
 
-The CLI stores keys in `~/.codoc/credentials.json` with mode 0600 and never prints them. During extra credential discovery, use a private parser or credential tool that does not expose secrets. Never persist keys or codes in a repository, shell startup file, transcript, or memory; remember only nonsecret account metadata and credential locations.
+The CLI stores keys in each agent's `credentials.json` with mode 0600 and never prints them. During extra credential discovery, use a private parser or credential tool that does not expose secrets. Never persist keys or codes in a repository, shell startup file, transcript, or memory; remember only nonsecret account metadata and credential locations.
 
 ## Work with documents
 
@@ -115,7 +117,7 @@ Keep comments short. Bodies support paragraphs, line breaks, bold, italic, strik
 
 ### Monitor
 
-When asked to watch, or after the user accepts the offer, use `node <skill-dir>/scripts/watch.mjs <doc>`. It saves a cursor per document, honors `pollAfter`, fetches threads named by events, and exits after the first activity. Handle that activity, then run it again to resume. Continuing polls show an agent-listening cue on the reading page.
+When asked to watch, or after the user accepts the offer, use `node <skill-dir>/scripts/watch.mjs <doc> --agent <name>`. It saves a cursor per document in the agent's folder (not when using only `CODOC_API_KEY`), honors `pollAfter`, fetches threads named by events, and exits after the first activity. Handle that activity, then run it again to resume. Continuing polls show an agent-listening cue on the reading page.
 
 Use a cancellable background process when foreground polling would block responses. Use `--follow` only when the host can stream its JSON Lines to you. Output types are `baseline`, `resume`, `event`, `notice`, and `exit`; an `event` includes the server event and fetched threads. Treat `exit.reason: "stop"` as the end of monitoring. Stop any running watcher when the user ends the task or the session ends. For a blocking foreground host, set `--max-seconds` below its command timeout; use `--mode poll` if held requests fail. Do not start two watchers for one document.
 
@@ -123,9 +125,9 @@ For a manual loop, attach once with `events <doc> --since now --wait 0`, process
 
 ## Command and error reference
 
-`codoc.mjs <command> [args] [--base <url>] [--compact]` prints JSON on stdout, except `llms`, `read --raw`, and `--help`. Commands: `auth status|rename|register|request-email|verify-email|recover|rotate`; `create`; `read`; `find`; `edit`; `write`; `diff`; `comments`; `comments-batch`; `comment|reply|resolve|reanchor`; `access`; `events`; `delete --yes`; `llms`. Each command accepts `--help` for its flags. Exit codes: 0 success, 1 server refusal, 2 transport failure, 3 no valid credential, 4 usage error.
+`codoc.mjs <command> [args] --agent <name> [--base <url>] [--compact]` prints JSON on stdout, except `llms`, `read --raw`, and `--help`. Commands: `auth list|status|rename|register|request-email|verify-email|recover|rotate`; `create`; `read`; `find`; `edit`; `write`; `diff`; `comments`; `comments-batch`; `comment|reply|resolve|reanchor`; `access`; `events`; `delete --yes`; `llms`. Each command accepts `--help` for its flags. Exit codes: 0 success, 1 server refusal, 2 transport failure, 3 no valid credential, 4 usage error, including a missing `--agent`.
 
-For a requested display-name change, use `auth rename --name "<agent name>"`; `llms --section "Rename agent display name"` has the API contract.
+For a requested display-name change, use `auth rename --agent <current name> --name "<new name>"`; it also moves your folder, so use the new name with `--agent` afterward. Stop running watchers first. `llms --section "Rename agent display name"` has the API contract.
 
 For exact API fields when needed, `codoc.mjs llms --section edit_doc` fetches one live reference section. Use `create_doc`, `read_doc`, `edit_doc`, `write_doc`, and `delete_doc` for their corresponding commands; `read_comments` for thread reads, `comments` for mutations, and `"Access management"` for sharing. `find`, `diff`, and `events` use their command names. Section lookup takes operation names or headings, not HTTP paths; plain `llms` returns the full reference.
 

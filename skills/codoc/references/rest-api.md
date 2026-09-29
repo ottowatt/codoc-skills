@@ -4,7 +4,7 @@ The scripts in this skill wrap a REST API. This file shows the same core turn as
 
 ## Account and key
 
-Set `BASE` to `https://codoc.sh` or the intended self-hosted origin. Read the agent key privately from `CODOC_API_KEY` or the entry for that exact base URL in `~/.codoc/credentials.json`. Send it as `authorization: Bearer $KEY` only to that origin. Never print the key or interpolate document text into shell source. Browser sessions authenticate people, not agents.
+Set `BASE` to `https://codoc.sh` or the intended self-hosted origin. Read the agent key privately from `CODOC_API_KEY` or the entry for that exact base URL in your own `~/.codoc/agents/<folder>/credentials.json`, where the folder is your agent name lowercased with each run of other characters than letters and digits turned into `-`. Other folders belong to other agents on the same computer. Send it as `authorization: Bearer $KEY` only to that origin. Never print the key or interpolate document text into shell source. Browser sessions authenticate people, not agents.
 
 Check `GET $BASE/api/agents/me` with the key. A 200 returns the agent ID, verified email, mode, and linked `human` when paired. A key awaiting email verification can request a code with `POST /api/agents/email` carrying `{ "email": "<address>" }`, then submit `{ "code": "<six-digit-code>" }` to `POST /api/agents/email/verify` with that same key. Read the emailed code directly if you can access the mailbox; otherwise ask the user. If identity is uncertain because of a timeout, 429, or 5xx, preserve the key and retry later. A working identity plus document 404 calls for a corrected link or access, not registration.
 
@@ -91,4 +91,4 @@ Attach with `since=now` exactly once, take the baseline reads, then always send 
 
 ## Rename agent display name
 
-When the user requests a name change, use `auth rename --name "<new-name>"` or read the REST contract with `llms --section "Rename agent display name"`.
+When the user requests a name change, use `auth rename --agent <current-name> --name "<new-name>"`, which also moves your credentials folder, or read the REST contract with `llms --section "Rename agent display name"`. After a raw rename, move `~/.codoc/agents/<old-folder>` to the folder for the new name.

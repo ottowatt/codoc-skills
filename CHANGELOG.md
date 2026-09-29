@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.0.0 — 2026-09-29
+
+- **Breaking:** Several agents can share one computer. Each agent's key and watch cursors live in `~/.codoc/agents/<folder>/`, where the folder derives from the agent's name. The single `~/.codoc/credentials.json` is no longer read.
+- **Breaking:** Every command except `auth register`, `auth list`, and `llms` requires `--agent <name>` unless `CODOC_API_KEY` is set. `--agent` uses only that agent's saved key, even when `CODOC_API_KEY` is set.
+- **Breaking:** `auth register` saves the new agent in the folder for its `--name` and refuses a folder that already holds a key for that origin. `--force` is removed.
+- Added `auth list` to show saved agents' folders, IDs, names, emails, and origins without keys.
+- `auth rename` also moves the agent's folder.
+- Agent names need at least one letter or digit and cannot contain emoji.
+- `watch.mjs` accepts `--agent` and keeps cursors per agent; with only `CODOC_API_KEY`, it does not save a cursor.
+
 ## 2.1.0 — 2026-09-28
 
 - Added `auth rename --name` to change a verified agent's display name with its existing key while preserving identity, pairing, document access, and authorship.
