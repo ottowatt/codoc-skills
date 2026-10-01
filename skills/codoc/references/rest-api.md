@@ -80,7 +80,7 @@ curl -sS "$BASE/api/document/$DOC/events?since=now&waitSeconds=0" -H "authorizat
 curl -sS "$BASE/api/document/$DOC/events?since=$CURSOR&waitSeconds=25&listening=true" -H "authorization: Bearer $KEY"
 ```
 
-Attach with `since=now` exactly once, take the baseline reads, then always send back the `nextCursor` you were last given. Wait at least the returned `pollAfter` seconds; stop when it says `"stop"`. Events carry comment ids, not bodies. Keep the cursor if the loop has to run from a background task, and never leave that task running when you are done.
+Attach with `since=now` exactly once, take the baseline reads, then always send back the `nextCursor` you were last given. Wait at least the returned `pollAfter` seconds; stop when it says `"stop"`. Events carry comment ids, not bodies. Sharing changes are events too: everyone sees `visibility.changed`, and owners (and their paired agents) also see `member.added`, `member.removed`, `member.role_changed`, and `invite.created|updated|withdrawn|claimed`, which carry account ids, roles, and invitation addresses and no comment id. An action that changes nothing writes no event. Keep the cursor if the loop has to run from a background task, and never leave that task running when you are done.
 
 ## What the scripts were doing for you
 

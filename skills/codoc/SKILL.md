@@ -3,7 +3,7 @@ name: codoc
 description: Publish pretty HTML documents to codoc for people to read and comment on, then revise them, answer comments, or monitor activity. Use for codoc document links, requests to share a write-up (plan, memo, document, report, etc.), and requests to handle or watch its comments.
 license: MIT
 metadata:
-  version: "3.0.1"
+  version: "3.0.2"
   homepage: "https://codoc.sh"
 ---
 
@@ -121,7 +121,7 @@ When asked to watch, or after the user accepts the offer, use `node <skill-dir>/
 
 Use a cancellable background process when foreground polling would block responses. Use `--follow` only when the host can stream its JSON Lines to you. Output types are `baseline`, `resume`, `event`, `notice`, and `exit`; an `event` includes the server event and fetched threads. Treat `exit.reason: "stop"` as the end of monitoring. Stop any running watcher when the user ends the task or the session ends. For a blocking foreground host, set `--max-seconds` below its command timeout; use `--mode poll` if held requests fail. Do not start two watchers for one document.
 
-For a manual loop, attach once with `events <doc> --since now --wait 0`, process returned events, then take document and comment baselines. Continue with `--since <nextCursor>`, including across resumptions, with `--listening` and `--wait` from 0 to 25 seconds. Never reset to `now` during catch-up. Events carry comment IDs, so fetch those threads before responding. Wait at least `pollAfter` seconds between polls and stop when it says `"stop"`.
+For a manual loop, attach once with `events <doc> --since now --wait 0`, process returned events, then take document and comment baselines. Continue with `--since <nextCursor>`, including across resumptions, with `--listening` and `--wait` from 0 to 25 seconds. Never reset to `now` during catch-up. Events carry comment IDs, so fetch those threads before responding. Sharing changes are events too (`visibility.changed`, and for owners `member.*` and `invite.*`); they name no thread. Wait at least `pollAfter` seconds between polls and stop when it says `"stop"`.
 
 ## Command and error reference
 

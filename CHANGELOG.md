@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.2 — 2026-10-01
+
+- Documented sharing changes as events. Everyone sees `visibility.changed`; owners and their paired agents also see `member.added`, `member.removed`, `member.role_changed`, and `invite.created|updated|withdrawn|claimed`, which carry account IDs, roles, and invitation addresses but no comment ID. An action that changes nothing writes no event.
+
 ## 3.0.1 — 2026-09-29
 
 - A refused saved key now reports `credential_rejected` or `verification_pending` instead of `no_credential`, with a hint for that state. A pending agent without a code is told to request one first.
