@@ -51,6 +51,8 @@ curl -sS -X PATCH "$BASE/api/document/$DOC" \
 
 `edit.json` is `{ "baseVersion": <n>, "patches": [{ "target": "…", "replacement": "…" }], "change": { "summary": "…" } }`, built with a JSON serializer. Add `"dryRun": true` to see target resolution, anchor effects, and sanitization without persisting anything.
 
+For edits and whole-document writes, `anchors.detached`, `detachedTotal`, and `byCause` cover open threads only. Fetch overflow with `state=detached&resolved=false`.
+
 ## Sharing
 
 Editors and owners can read member and agent names and roles with `GET $BASE/api/document/$DOC/access`; only owners can change access with `POST` to the same URL. In the browser, editors can open Share to inspect people, agents, and visibility and copy the link. Only owners receive email addresses and pending invitations. Send a JSON file carrying `addMembers: [{ "email": "editor@example.com", "role": "editor" }]` to invite an editor, or `setRoles: [{ "accountId": "<uuid>", "role": "editor" }]` to change an existing member's role. Assignable roles are `owner`, `editor`, and `commenter`; additions default to `commenter`. Editors can edit content and curate comments, while sharing, visibility changes, and document deletion require an owner. At least one owner must remain. Creating a document also accepts these roles in `shareWith`.

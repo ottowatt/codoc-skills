@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.1 — 2026-10-02
+
+- Edit receipts, the overview's detached count, and `comment.detached` events cover open threads only; resolved threads need no reanchoring. Reanchoring detached open threads is part of the edit, with a short nearby quote when the original text has no replacement. Resolving is left to the thread's author or the user.
+
 ## 3.1.0 — 2026-10-02
 
 - Editors can inspect member and agent names and roles through `access` and open a read-only Share sheet in the browser to see access and copy the link. Email addresses, pending invitations, and access changes remain owner-only.
