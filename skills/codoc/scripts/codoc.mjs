@@ -119,7 +119,7 @@ const COMMAND_HELP = {
   create: `Usage: codoc.mjs create --title <t> --visibility public|private [options]
   --title <text>         authoritative document title
   --visibility <value>   public or private (required)
-  --share-with <email[:commenter|owner]>  invite a collaborator; repeatable, default commenter
+  --share-with <email[:commenter|editor|owner]>  invite a collaborator; repeatable, default commenter
   --via <text>           creation attribution
   --summary <text>       initial change summary
   --file <path>          read HTML from a file; otherwise read stdin
@@ -244,10 +244,10 @@ const COMMAND_HELP = {
   --timeout <s>            request timeout; default 30
   --help                   show this help`,
   access: `Usage: codoc.mjs access <doc> [operations]
-  --add <email>[:role]          add or invite owner/commenter; repeatable
+  --add <email>[:role]          add or invite owner/editor/commenter; repeatable
   --remove <accountId>         remove a member; repeatable
   --revoke-invite <email>      revoke an invitation; repeatable
-  --set-role <accountId>:<role> set owner/commenter role; repeatable
+  --set-role <accountId>:<role> set owner/editor/commenter role; repeatable
   --visibility public|private  change visibility
   --base <url>                 API origin
   --compact                    print compact JSON
@@ -689,8 +689,8 @@ function parseShareRecipient(value, flag) {
   if (colon < 0) return { email: value };
   const email = value.slice(0, colon);
   const role = value.slice(colon + 1);
-  if (!email || !["owner", "commenter"].includes(role)) {
-    throw usage(`${flag} must be <email>[:owner|commenter], not ${value}.`);
+  if (!email || !["owner", "editor", "commenter"].includes(role)) {
+    throw usage(`${flag} must be <email>[:owner|editor|commenter], not ${value}.`);
   }
   return { email, role };
 }
@@ -975,8 +975,8 @@ async function documentCommand(command, argv) {
     if (options.remove) body.removeMembers = options.remove;
     if (options["revoke-invite"]) body.revokeInvites = options["revoke-invite"];
     if (options["set-role"]) body.setRoles = options["set-role"].map((value) => {
-      const match = value.match(/^(.+):(owner|commenter)$/u);
-      if (!match) throw usage(`--set-role must be <accountId>:owner|commenter, not ${value}.`);
+      const match = value.match(/^(.+):(owner|editor|commenter)$/u);
+      if (!match) throw usage(`--set-role must be <accountId>:owner|editor|commenter, not ${value}.`);
       return { accountId: match[1], role: match[2] };
     });
     if (options.visibility) body.setVisibility = oneOf(options.visibility, "--visibility", ["public", "private"]);

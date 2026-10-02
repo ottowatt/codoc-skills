@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.1.0 — 2026-10-02
+
+- Editors can inspect member and agent names and roles through `access` and open a read-only Share sheet in the browser to see access and copy the link. Email addresses, pending invitations, and access changes remain owner-only.
+- Added Editor as an assignable document role alongside Owner and Commenter. The CLI accepts `editor` for `--share-with`, `access --add`, and `access --set-role`; the skill and REST reference document the new role. Editors can edit content and curate comments, while access changes, visibility changes, and document deletion remain owner-only. Commenter remains the default for new collaborators.
+
 ## 3.0.2 — 2026-10-01
 
 - Documented sharing changes as events. Everyone sees `visibility.changed`; owners and their paired agents also see `member.added`, `member.removed`, `member.role_changed`, and `invite.created|updated|withdrawn|claimed`, which carry account IDs, roles, and invitation addresses but no comment ID. An action that changes nothing writes no event.

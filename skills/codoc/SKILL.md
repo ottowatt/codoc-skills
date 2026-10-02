@@ -3,7 +3,7 @@ name: codoc
 description: Publish pretty HTML documents to codoc for people to read and comment on, then revise them, answer comments, or monitor activity. Use for codoc document links, requests to share a write-up (plan, memo, document, report, etc.), and requests to handle or watch its comments.
 license: MIT
 metadata:
-  version: "3.0.2"
+  version: "3.1.0"
   homepage: "https://codoc.sh"
 ---
 
@@ -21,9 +21,9 @@ Public documents allow anonymous reads of current content and comments; commenti
 
 Agent and human accounts pair automatically when both verify the same email, including if the human signs up later. Pairing preserves the agent ID, key, and authorship, transfers its grants and document ownership to the human, and retains the stronger role where both had access. A pair cannot be reassigned or made independent. Disconnecting invalidates the agent's keys while preserving its contribution history; recovery can restore the connection.
 
-Owners manage sharing and can edit or delete documents; editors can edit content; commenters can comment and reply; viewers can read. History, retained versions, and diffs require editor or owner access even for public documents. New grants may assign owner or commenter, and at least one owner must remain.
+Owners manage sharing and can edit or delete documents; editors can edit content; commenters can comment and reply; viewers can read. History, retained versions, and diffs require editor or owner access even for public documents. New grants may assign owner, editor, or commenter, and at least one owner must remain.
 
-`access <doc>` returns visibility and your role; owners also receive members, agents, and invitations. Independent agents with grants appear before contributing and have editable roles. Paired agents appear after contributing while their connection and human's membership are active; change the human's role to change theirs. Public commenters without membership are absent from this roster. Use `access` to add members by email, revoke invitations, change visibility, or remove/change existing members by account ID. New grants trigger a notice.
+`access <doc>` returns visibility and your role; editors and owners also receive member and agent names and roles. Only owners receive email addresses and pending invitations. Editors can inspect the Share sheet and copy the link; only owners can change access. Independent agents with grants appear before contributing and have editable roles. Paired agents appear after contributing while their connection and human's membership are active; change the human's role to change theirs. Public commenters without membership are absent from this roster. Use `access` to add members by email, revoke invitations, change visibility, or remove/change existing members by account ID. New grants trigger a notice.
 
 ## Agent access
 
@@ -81,7 +81,7 @@ The document scrolls inside an iframe. Desktop comments occupy a right rail and 
 
 Read [the document writing guide](references/writing/document.md) before drafting HTML; for market research also read [its specific guide](references/writing/market-research.md). Maintain one complete HTML file with semantic structure, embedded CSS, and line breaks at element boundaries. Write for the document's purpose and requested tone; use clear claims, decisions, and criteria, and remove obsolete draft fragments.
 
-Create private documents by default; use public only when requested or clearly required. Use repeatable `--share-with <email[:commenter|owner]>` for additional collaborators; the role defaults to commenter. The creation title is authoritative: changing the source `<title>` later does not rename the document.
+Create private documents by default; use public only when requested or clearly required. Use repeatable `--share-with <email[:commenter|editor|owner]>` for additional collaborators; the role defaults to commenter. The creation title is authoritative: changing the source `<title>` later does not rename the document.
 
 ```sh
 node <skill-dir>/scripts/codoc.mjs create --title "<title>" --visibility private --file <path.html>
