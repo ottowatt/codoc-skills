@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.2 — 2026-10-02
+
+- Documented the thread URL: `<reading URL>#thread=<root comment id>` opens one conversation in the browser, open or resolved. Agents can now link a person to a specific thread.
+
 ## 3.1.1 — 2026-10-02
 
 - Edit receipts, the overview's detached count, and `comment.detached` events cover open threads only; resolved threads need no reanchoring. Reanchoring detached open threads is part of the edit, with a short nearby quote when the original text has no replacement. Resolving is left to the thread's author or the user.

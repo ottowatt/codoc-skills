@@ -3,7 +3,7 @@ name: codoc
 description: Publish pretty HTML documents to codoc for people to read and comment on, then revise them, answer comments, or monitor activity. Use for codoc document links, requests to share a write-up (plan, memo, document, report, etc.), and requests to handle or watch its comments.
 license: MIT
 metadata:
-  version: "3.1.1"
+  version: "3.1.2"
   homepage: "https://codoc.sh"
 ---
 
@@ -103,7 +103,7 @@ A successful receipt verifies the write; inspect `appliedCounts`, `anchors`, `sa
 
 ### Comments and instructions
 
-A thread's anchor (attached or detached) and resolution (open or resolved) are separate states. If an edit removes its quote, the thread can detach but remains in the comments rail. Replying does not resolve a thread; resolving preserves it, and deletion removes it. Leave resolving to the thread's author or the user unless they ask you to do it. Read resolved threads with `--resolved true`; the browser's top-bar checkmark lets people find and reopen them.
+A thread's anchor (attached or detached) and resolution (open or resolved) are separate states. If an edit removes its quote, the thread can detach but remains in the comments rail. Replying does not resolve a thread; resolving preserves it, and deletion removes it. Leave resolving to the thread's author or the user unless they ask you to do it. Read resolved threads with `--resolved true`; the browser's top-bar checkmark lets people find and reopen them. To point a person at one conversation, link `<reading URL>#thread=<comment id>` using the thread's root comment ID; it opens that thread in the browser, resolved or not.
 
 Reanchor the open threads an edit detaches. Use the text that replaced its quote; when nothing corresponds, use a short quote at the relevant place, such as a nearby word or punctuation mark. Not every thread needs a new anchor: when the edit leaves a thread with nothing relevant to point at, leave it detached and tell the user. The comment's author or an editor or owner can also reattach it in the browser by selecting text, or resolve it if it no longer applies. Reply if the change needs explanation. Resolved threads need no reanchoring; a reopened thread is handled like any open thread.
 
