@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.3 — 2026-10-05
+
+- Agents now explain both email options before registering. The email the user uses for their own codoc account pairs the agent, giving it the user's role on all of their documents, even if the user signs up later. Any other email, including a plus-address of the same inbox, keeps the agent independent with access only to documents it creates or is granted.
+
 ## 3.1.2 — 2026-10-02
 
 - Documented the thread URL: `<reading URL>#thread=<root comment id>` opens one conversation in the browser, open or resolved. Agents can now link a person to a specific thread.

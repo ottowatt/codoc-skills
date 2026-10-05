@@ -3,7 +3,7 @@ name: codoc
 description: Publish pretty HTML documents to codoc for people to read and comment on, then revise them, answer comments, or monitor activity. Use for codoc document links, requests to share a write-up (plan, memo, document, report, etc.), and requests to handle or watch its comments.
 license: MIT
 metadata:
-  version: "3.1.2"
+  version: "3.1.3"
   homepage: "https://codoc.sh"
 ---
 
@@ -34,7 +34,7 @@ Before working with a document, run `auth status --agent <your name>` for the in
 | Credential state | Required next action |
 | --- | --- |
 | Working key | Use it to continue the user's task. |
-| No key found | Register an agent account with the user's permission. If an email and permission were already supplied for this purpose, register now; otherwise explain the email choice below and ask: "Which email may I use to register my codoc agent account?" Verify the account, then retry the original task. |
+| No key found | Register an agent account with the user's permission. If an email and permission were already supplied for this purpose, register now; otherwise explain both options under Choosing the registration email, then ask: "Which email may I use to register my codoc agent account?" Verify the account, then retry the original task. |
 | Saved key awaiting email verification | Obtain the agent verification code and finish verification with that key, then retry the original task. |
 | Saved key rejected | Recover the known agent when its email is available. If recovery cannot proceed, ask for an email and permission to register a replacement. |
 | Key check times out or returns 429 or 5xx | Keep the key, report that the check is inconclusive, and retry later. |
@@ -50,7 +50,12 @@ node <skill-dir>/scripts/codoc.mjs auth recover --agent <name> --email <address>
 
 The first receipt proves neither account existence nor delivery. A code issued within the last 60 seconds suppresses another send; use it or wait for the quiet window. If the verified code finds several agents at that email, it lists their IDs and names without consuming the code. Choose the intended agent and repeat with `--agent-id <id>` and the same code. Recovery also verifies a pending agent, retains its identity, history, and grants, revokes old keys, and stores a replacement privately in the `--agent` folder. If replacement validation was interrupted, run `auth status` again.
 
-Register with the user's permission. Use the user's codoc email when they want the agent to share their document access: once both accounts verify the same email, codoc links them automatically and the agent inherits the user's document permissions. Use a separate reachable email when they want an independent agent account with its own permissions; the user or an owner must grant it access to each private document they want it to work on. Explain this difference when the user needs to choose an email. An email supplied for this purpose gives permission to use it. Ask for an address if neither is available; do not invent one. If recovery cannot proceed, offer this path rather than repeating it indefinitely. A replacement does not inherit the old agent's history or independent grants. Use the agent's own name; registration saves the key in the folder for that name and prints the `--agent` value for later commands:
+**Choosing the registration email.** Before asking for an address, tell the user both options and what each lets the agent access:
+
+- **Paired: the email the user uses, or will use, for their own codoc account.** Codoc links the agent to the user's account once both have verified the same email. If the user has no codoc account yet, the link happens when they sign up with that email. A paired agent has the user's role on every document the user owns or has been granted, including ones shared with them later. Documents the agent creates belong to the user. A paired agent cannot be made independent later.
+- **Independent: any other email the user can receive mail at.** The agent can access only documents it creates or is granted. It owns the documents it creates and shares them with the user using `--share-with <user's email>:owner` or a lesser role. For any other private document, the user or an owner must grant it access. A plus-address such as `name+agent@example.com`, counts as a different email, so the agent stays independent and the verification code still arrives in the user's inbox if their mail provider supports plus-addresses.
+
+Register with the user's permission. An email supplied for this purpose gives permission to use it. Ask for an address if neither is available; do not invent one. If recovery cannot proceed, offer this path rather than repeating it indefinitely. A replacement does not inherit the old agent's history or independent grants. Use the agent's own name; registration saves the key in the folder for that name and prints the `--agent` value for later commands:
 
 ```sh
 node <skill-dir>/scripts/codoc.mjs auth register --email <address> --name "<agent name>"
