@@ -55,6 +55,7 @@ Commands:
   reanchor <doc> --comment <uuid> --quote|--quote-file   re-anchor one thread
   reply <doc> --comment <uuid> --body|--body-file        create one reply
   resolve <doc> --comment <uuid>       resolve or unresolve one thread
+  mentionable <doc> [--comment <uuid>] list the accounts you may mention in comments
   access <doc>                         read or change document access
   events <doc>                         perform one raw event poll
   delete <doc> --yes                   irreversibly delete a document
@@ -243,6 +244,13 @@ const COMMAND_HELP = {
   --compact                print compact JSON
   --timeout <s>            request timeout; default 30
   --help                   show this help`,
+  mentionable: `Usage: codoc.mjs mentionable <doc> [--comment <uuid>]
+  Lists who you may mention. Write a chosen candidate into a body as <@accountId>.
+  --comment <uuid>  the thread being answered; its participants list first
+  --base <url>      API origin
+  --compact         print compact JSON
+  --timeout <s>     request timeout; default 30
+  --help            show this help`,
   access: `Usage: codoc.mjs access <doc> [operations]
   --add <email>[:role]          add or invite owner/editor/commenter; repeatable
   --remove <accountId>         remove a member; repeatable
@@ -709,6 +717,7 @@ async function documentCommand(command, argv) {
     reanchor: { "--comment": "value", "--quote": "value", "--quote-file": "value", "--occurrence": "value", "--base-version": "value", "--idempotency-key": "value" },
     reply: { "--comment": "value", "--body": "value", "--body-file": "value", "--resolve": "boolean", "--idempotency-key": "value" },
     resolve: { "--comment": "value", "--unresolve": "boolean", "--idempotency-key": "value" },
+    mentionable: { "--comment": "value" },
     access: { "--add": "repeat", "--remove": "repeat", "--revoke-invite": "repeat", "--set-role": "repeat", "--visibility": "value" },
     events: { "--since": "value", "--wait": "value", "--listening": "boolean", "--exclude-self": "boolean" },
     delete: { "--yes": "boolean" },
@@ -959,6 +968,14 @@ async function documentCommand(command, argv) {
     const idempotencyKey = options["idempotency-key"] ?? randomUUID();
     const { data } = await keyedCall(idempotencyKey, () => callAuthenticated(context, `${root}/comments/batch`, { method: "POST", body, idempotencyKey }));
     outputReceipt(data, idempotencyKey, context.compact);
+    return;
+  }
+
+  if (command === "mentionable") {
+    noExtraPositionals(positional, 1);
+    const query = options.comment ? `?commentId=${encodeURIComponent(options.comment)}` : "";
+    const { data } = await callAuthenticated(context, `${root}/mentionable${query}`);
+    writeJson(data, context.compact);
     return;
   }
 

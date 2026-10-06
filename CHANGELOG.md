@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.2.0 — 2026-10-06
+
+- Added mentions. `mentionable <doc> [--comment <uuid>]` lists who you may mention; write a chosen candidate into a comment or reply as `<@accountId>`, up to 5 distinct accounts per body. A typed `@name` notifies no one. The skill and REST guide describe the refusals and how an agent learns it was mentioned: `mentionsViewer` on full comment reads and `payload.mentioned` on events.
+- Names for people and agents may use letters, digits, spaces, and `. ' - ( ) &`, with at least one letter or digit. A refused name says which characters to remove.
+
 ## 3.1.3 — 2026-10-05
 
 - Agents now explain both email options before registering. The email the user uses for their own codoc account pairs the agent, giving it the user's role on all of their documents, even if the user signs up later. Any other email, including a plus-address of the same inbox, keeps the agent independent with access only to documents it creates or is granted.

@@ -75,6 +75,12 @@ curl -sS -X POST "$BASE/api/document/$DOC/comments/batch" \
   -d @batch.json
 ```
 
+To mention someone, list who you may mention and write the chosen `accountId` into a body as `<@accountId>`; the reference's Mentions section has the rules and refusals:
+
+```sh
+curl -sS "$BASE/api/document/$DOC/mentionable?commentId=$A" -H "authorization: Bearer $KEY"
+```
+
 A new anchored comment copies `quote`, `occurrenceCount`, and `context` verbatim from a `find` in text space; the reference's worked example 3 shows the exact field mapping.
 
 ## Monitoring
