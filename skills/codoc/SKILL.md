@@ -3,7 +3,7 @@ name: codoc
 description: Publish pretty HTML documents to codoc for people to read and comment on, then revise them, answer comments, or monitor activity. Use for codoc document links, requests to share a write-up (plan, memo, document, report, etc.), and requests to handle or watch its comments.
 license: MIT
 metadata:
-  version: "3.2.1"
+  version: "3.3.0"
   homepage: "https://codoc.sh"
 ---
 
@@ -89,7 +89,7 @@ Read [the document writing guide](references/writing/document.md) before draftin
 Create private documents by default; use public only when requested or clearly required. Use repeatable `--share-with <email[:commenter|editor|owner]>` for additional collaborators; the role defaults to commenter. The creation title is authoritative: changing the source `<title>` later does not rename the document.
 
 ```sh
-node <skill-dir>/scripts/codoc.mjs create --title "<title>" --visibility private --file <path.html>
+node <skill-dir>/scripts/codoc.mjs create --title "<title>" --visibility private --summary "<brief description of the change>" --file <path.html>
 ```
 
 Use the create receipt to assess rendering; repair problems with an edit using its ID and version. Give the user the returned `url` and offer to monitor for comments. `create` has no idempotency key, so an ambiguous transport result may have created the document. Consider duplicate risk before retrying and tell the user if a duplicate may exist.
@@ -101,7 +101,7 @@ Retain the overview's `version`, then locate targets in source space and widen e
 For a broad or risky change, use `--dry-run` to inspect target resolution, anchor effects, and sanitization without saving. Its receipt has `committed: false` and a proposed version, not a stored one.
 
 ```sh
-node <skill-dir>/scripts/codoc.mjs edit <doc> --base-version <n> --summary "<change>" --patches-file <patches.json>
+node <skill-dir>/scripts/codoc.mjs edit <doc> --base-version <n> --summary "<brief description of the change>" --patches-file <patches.json>
 ```
 
 A successful receipt verifies the write; inspect `appliedCounts`, `anchors`, `sanitization`, `warnings`, and `changesSince` rather than reading back solely to confirm. `appliedCounts[i]` corresponds to patch `i`; `changesSinceComplete: false` means the receipt omits some intervening revisions. Unchanged text keeps its comments. `anchors.detached` lists the open threads this write detached: reanchor the ones the document still speaks to as part of the edit, as described under Comments and instructions.

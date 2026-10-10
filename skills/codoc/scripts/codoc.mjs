@@ -117,12 +117,12 @@ const COMMAND_HELP = {
   --code <code>      six-digit recovery code; omit to request one
   --base <url>       API origin
   --help             show this help`,
-  create: `Usage: codoc.mjs create --title <t> --visibility public|private [options]
+  create: `Usage: codoc.mjs create --title <t> --visibility public|private --summary <text> [options]
   --title <text>         authoritative document title
   --visibility <value>   public or private (required)
   --share-with <email[:commenter|editor|owner]>  invite a collaborator; repeatable, default commenter
   --via <text>           creation attribution
-  --summary <text>       initial change summary
+  --summary <text>       brief description of the change, equivalent to the git commit message for a repo (required)
   --file <path>          read HTML from a file; otherwise read stdin
   --allow-empty          permit an intentionally empty document
   --base <url>           API origin
@@ -149,9 +149,9 @@ const COMMAND_HELP = {
   --compact              print compact JSON
   --timeout <s>          request timeout; default 30
   --help                 show this help`,
-  edit: `Usage: codoc.mjs edit <doc> --base-version <n> [options] (--patches-file <path> | patches JSON on stdin | --target <t> --replacement <r>)
+  edit: `Usage: codoc.mjs edit <doc> --base-version <n> --summary <text> [options] (--patches-file <path> | patches JSON on stdin | --target <t> --replacement <r>)
   --base-version <n>       version the patches were based on
-  --summary <text>         one-line change summary
+  --summary <text>         brief description of the change, equivalent to the git commit message for a repo (required)
   --dry-run                evaluate without persistence
   --idempotency-key <key>  reuse a mutation identity; generated when absent
   --patches-file <path>    read a JSON patch array
@@ -162,9 +162,9 @@ const COMMAND_HELP = {
   --compact                print compact JSON
   --timeout <s>            request timeout; default 30
   --help                   show this help`,
-  write: `Usage: codoc.mjs write <doc> --base-version <n> [options] [--file <path>]
+  write: `Usage: codoc.mjs write <doc> --base-version <n> --summary <text> [options] [--file <path>]
   --base-version <n>       current version for compare-and-swap
-  --summary <text>         one-line change summary
+  --summary <text>         brief description of the change, equivalent to the git commit message for a repo (required)
   --dry-run                evaluate without persistence
   --idempotency-key <key>  reuse a mutation identity; generated when absent
   --file <path>            read HTML from a file; otherwise read stdin
@@ -755,7 +755,7 @@ async function documentCommand(command, argv) {
       visibility,
       ...(options["share-with"] ? { shareWith: options["share-with"].map((value) => parseShareRecipient(value, "--share-with")) } : {}),
       ...(options.via ? { via: options.via } : {}),
-      ...(options.summary ? { change: { summary: options.summary } } : {}),
+      change: { summary: required(options.summary, "--summary <text>") },
     };
     // Create a document: create_doc has no idempotency key, so an uncertain call is not retried.
     const { data } = await callAuthenticated(context, "/api/document", { method: "POST", body });
@@ -820,7 +820,7 @@ async function documentCommand(command, argv) {
       patches = parseJsonInput(options["patches-file"], "patches input");
       if (!Array.isArray(patches)) throw usage("Patches input must be a JSON array.");
     }
-    const body = { baseVersion, patches, ...(options.summary ? { change: { summary: options.summary } } : {}), ...(options["dry-run"] ? { dryRun: true } : {}) };
+    const body = { baseVersion, patches, change: { summary: required(options.summary, "--summary <text>") }, ...(options["dry-run"] ? { dryRun: true } : {}) };
     const idempotencyKey = options["idempotency-key"] ?? randomUUID();
     const { data } = await keyedCall(idempotencyKey, () => callAuthenticated(context, root, { method: "PATCH", body, idempotencyKey }));
     outputReceipt(data, idempotencyKey, context.compact);
@@ -836,7 +836,7 @@ async function documentCommand(command, argv) {
     const body = {
       baseVersion: integer(required(options["base-version"], "--base-version <n>"), "--base-version", { min: 1 }),
       html,
-      ...(options.summary ? { change: { summary: options.summary } } : {}),
+      change: { summary: required(options.summary, "--summary <text>") },
       ...(options["dry-run"] ? { dryRun: true } : {}),
     };
     const idempotencyKey = options["idempotency-key"] ?? randomUUID();

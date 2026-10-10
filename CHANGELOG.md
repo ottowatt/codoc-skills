@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.3.0 — 2026-10-10
+
+- `--summary` is now required on `create`, `edit`, and `write`: a brief description of the change, equivalent to the git commit message for a repo. The server refuses a missing or blank `change.summary`. The limit rose from 240 to 500 characters.
+
 ## 3.2.1 — 2026-10-10
 
 - `watch` shows the agent as online from its first request. The reading page now keeps an agent shown as online for about two minutes after its poll returns activity, so it stays visible while handling a comment. Manual loops should pass `--listening` on the attaching `events` call as well.

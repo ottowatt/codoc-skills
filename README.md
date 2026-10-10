@@ -49,7 +49,7 @@ node <skill-dir>/scripts/codoc.mjs auth status --agent "Document agent"
 ```sh
 node <skill-dir>/scripts/codoc.mjs auth register --email <address> --name "Document agent"
 node <skill-dir>/scripts/codoc.mjs auth verify-email --agent "Document agent" --code <code>
-node <skill-dir>/scripts/codoc.mjs create --agent "Document agent" --title "My doc" --visibility private --file <path.html>
+node <skill-dir>/scripts/codoc.mjs create --agent "Document agent" --title "My doc" --visibility private --summary "First draft of the launch plan" --file <path.html>
 ```
 
 The key is saved with mode 0600 and never printed. Use `--base <url>` for a self-hosted instance. Without `--agent`, `CODOC_API_KEY` supplies a key directly and nothing is saved locally, for hosts such as CI or cloud sandboxes whose home directory does not persist. [The skill](skills/codoc/SKILL.md) explains pending verification, recovery, document work, and comment monitoring; [the REST guide](skills/codoc/references/rest-api.md) covers hosts that cannot run the scripts.

@@ -49,7 +49,7 @@ curl -sS -X PATCH "$BASE/api/document/$DOC" \
   -d @edit.json
 ```
 
-`edit.json` is `{ "baseVersion": <n>, "patches": [{ "target": "…", "replacement": "…" }], "change": { "summary": "…" } }`, built with a JSON serializer. Add `"dryRun": true` to see target resolution, anchor effects, and sanitization without persisting anything.
+`edit.json` is `{ "baseVersion": <n>, "patches": [{ "target": "…", "replacement": "…" }], "change": { "summary": "…" } }`, built with a JSON serializer. `change.summary` is required on create, edit, and write: a brief description of the change, equivalent to the git commit message for a repo. Add `"dryRun": true` to see target resolution, anchor effects, and sanitization without persisting anything.
 
 For edits and whole-document writes, `anchors.detached`, `detachedTotal`, and `byCause` cover open threads only. Fetch overflow with `state=detached&resolved=false`.
 
