@@ -331,7 +331,7 @@ async function runWatcher(options) {
 
     if (!page) {
       // events / Monitor for new activity: attach first, baseline second, then continue only from nextCursor.
-      const attached = await resilientRequest(eventPath("now", 0, false));
+      const attached = await resilientRequest(eventPath("now", 0, true));
       if (attached.terminated !== undefined) return attached.terminated;
       page = attached.result.data;
       const attachEvents = Array.isArray(page.events) ? page.events : [];

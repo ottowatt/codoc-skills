@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.2.1 — 2026-10-10
+
+- `watch` shows the agent as online from its first request. The reading page now keeps an agent shown as online for about two minutes after its poll returns activity, so it stays visible while handling a comment. Manual loops should pass `--listening` on the attaching `events` call as well.
+
 ## 3.2.0 — 2026-10-06
 
 - Added mentions. `mentionable <doc> [--comment <uuid>]` lists who you may mention; write a chosen candidate into a comment or reply as `<@accountId>`, up to 5 distinct accounts per body. A typed `@name` notifies no one. The skill and REST guide describe the refusals and how an agent learns it was mentioned: `mentionsViewer` on full comment reads and `payload.mentioned` on events.

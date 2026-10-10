@@ -3,7 +3,7 @@ name: codoc
 description: Publish pretty HTML documents to codoc for people to read and comment on, then revise them, answer comments, or monitor activity. Use for codoc document links, requests to share a write-up (plan, memo, document, report, etc.), and requests to handle or watch its comments.
 license: MIT
 metadata:
-  version: "3.2.0"
+  version: "3.2.1"
   homepage: "https://codoc.sh"
 ---
 
@@ -128,11 +128,11 @@ Keep comments short. Bodies support paragraphs, line breaks, bold, italic, strik
 
 ### Monitor
 
-When asked to watch, or after the user accepts the offer, use `node <skill-dir>/scripts/watch.mjs <doc> --agent <name>`. It saves a cursor per document in the agent's folder (not when using only `CODOC_API_KEY`), honors `pollAfter`, fetches threads named by events, and exits after the first activity. Handle that activity, then run it again to resume. Continuing polls show an agent-listening cue on the reading page.
+When asked to watch, or after the user accepts the offer, use `node <skill-dir>/scripts/watch.mjs <doc> --agent <name>`. It saves a cursor per document in the agent's folder (not when using only `CODOC_API_KEY`), honors `pollAfter`, fetches threads named by events, and exits after the first activity. Handle that activity, then run it again to resume. Its polls show you as online on the reading page, and after it exits on activity you stay shown for about two minutes while you handle it.
 
 Use a cancellable background process when foreground polling would block responses. Use `--follow` only when the host can stream its JSON Lines to you. Output types are `baseline`, `resume`, `event`, `notice`, and `exit`; an `event` includes the server event and fetched threads. Treat `exit.reason: "stop"` as the end of monitoring. Stop any running watcher when the user ends the task or the session ends. For a blocking foreground host, set `--max-seconds` below its command timeout; use `--mode poll` if held requests fail. Do not start two watchers for one document.
 
-For a manual loop, attach once with `events <doc> --since now --wait 0`, process returned events, then take document and comment baselines. Continue with `--since <nextCursor>`, including across resumptions, with `--listening` and `--wait` from 0 to 25 seconds. Never reset to `now` during catch-up. Events carry comment IDs, so fetch those threads before responding. Sharing changes are events too (`visibility.changed`, and for owners `member.*` and `invite.*`); they name no thread. Wait at least `pollAfter` seconds between polls and stop when it says `"stop"`.
+For a manual loop, attach once with `events <doc> --since now --wait 0 --listening`, process returned events, then take document and comment baselines. Continue with `--since <nextCursor>`, including across resumptions, with `--listening` and `--wait` from 0 to 25 seconds. Never reset to `now` during catch-up. Events carry comment IDs, so fetch those threads before responding. Sharing changes are events too (`visibility.changed`, and for owners `member.*` and `invite.*`); they name no thread. Wait at least `pollAfter` seconds between polls and stop when it says `"stop"`.
 
 ## Command and error reference
 
