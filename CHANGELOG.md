@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.0.0 — unreleased
+
+- The document API moved from `/api/document` to `/api/documents`. Earlier skill versions call the old paths, which no longer exist; update to this version.
+- Added `list`, which lists the documents you hold a grant on, with filters for title text, role, creator, recent activity, visibility and unresolved comments. `--active-since` finds documents with activity, or newly shared, since a given time.
+
 ## 3.3.0 — 2026-10-10
 
 - `--summary` is now required on `create`, `edit`, and `write`: a brief description of the change, equivalent to the git commit message for a repo. The server refuses a missing or blank `change.summary`. The limit rose from 240 to 500 characters.

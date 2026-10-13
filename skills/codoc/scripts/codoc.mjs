@@ -45,6 +45,7 @@ Commands:
   auth rotate                          rotate and securely store the agent key
   create --title <t> --visibility <v> create a document (this route has no idempotency key)
   read <doc>                           read a document view
+  list                                 list the documents you hold a grant on
   find <doc> <query>...                find source targets or text evidence
   edit <doc> --base-version <n>        apply exact source patches
   write <doc> --base-version <n>       replace the whole source document
@@ -117,12 +118,25 @@ const COMMAND_HELP = {
   --code <code>      six-digit recovery code; omit to request one
   --base <url>       API origin
   --help             show this help`,
+  list: `Usage: codoc.mjs list [options]
+  --q <text>                       part of the title, ignoring case
+  --role <role>                    owner, editor, commenter, or viewer; repeatable
+  --created-by <me|uuid>           the account that created the document
+  --active-since <iso>             activity or a new grant at or after this time
+  --visibility <value>             public or private
+  --has-unresolved-comments <bool> true or false
+  --sort <key>                     lastActiveAt or createdAt; newest first
+  --limit <n>                      1-100; default 20
+  --base <url>                     API origin
+  --compact                        print compact JSON
+  --timeout <s>                    request timeout; default 30
+  --help                           show this help`,
   create: `Usage: codoc.mjs create --title <t> --visibility public|private --summary <text> [options]
   --title <text>         authoritative document title
   --visibility <value>   public or private (required)
   --share-with <email[:commenter|editor|owner]>  invite a collaborator; repeatable, default commenter
   --via <text>           creation attribution
-  --summary <text>       brief description of the change, equivalent to the git commit message for a repo (required)
+  --summary <text>       brief description of the edit, similar to a git commit message (required)
   --file <path>          read HTML from a file; otherwise read stdin
   --allow-empty          permit an intentionally empty document
   --base <url>           API origin
@@ -151,7 +165,7 @@ const COMMAND_HELP = {
   --help                 show this help`,
   edit: `Usage: codoc.mjs edit <doc> --base-version <n> --summary <text> [options] (--patches-file <path> | patches JSON on stdin | --target <t> --replacement <r>)
   --base-version <n>       version the patches were based on
-  --summary <text>         brief description of the change, equivalent to the git commit message for a repo (required)
+  --summary <text>         brief description of the edit, similar to a git commit message (required)
   --dry-run                evaluate without persistence
   --idempotency-key <key>  reuse a mutation identity; generated when absent
   --patches-file <path>    read a JSON patch array
@@ -164,7 +178,7 @@ const COMMAND_HELP = {
   --help                   show this help`,
   write: `Usage: codoc.mjs write <doc> --base-version <n> --summary <text> [options] [--file <path>]
   --base-version <n>       current version for compare-and-swap
-  --summary <text>         brief description of the change, equivalent to the git commit message for a repo (required)
+  --summary <text>         brief description of the edit, similar to a git commit message (required)
   --dry-run                evaluate without persistence
   --idempotency-key <key>  reuse a mutation identity; generated when absent
   --file <path>            read HTML from a file; otherwise read stdin
@@ -403,7 +417,7 @@ async function callAuthenticated(context, pathname, options = {}) {
   const candidates = credentialCandidates(context.base, context.source);
   const result = await authenticatedRequest(context.base, candidates, pathname,
     { ...options, ...refusalContext(context), timeoutSeconds: context.timeoutSeconds });
-  if (result.status === 404 && pathname.startsWith("/api/document/")) {
+  if (result.status === 404 && pathname.startsWith("/api/documents/")) {
     await refuseIfKeyRejected(context, candidates[result.candidateIndex].key);
   }
   return { data: requireOk(result), source: result.source };
@@ -705,6 +719,7 @@ function parseShareRecipient(value, flag) {
 
 async function documentCommand(command, argv) {
   const specs = {
+    list: { "--q": "value", "--role": "repeat", "--created-by": "value", "--active-since": "value", "--visibility": "value", "--has-unresolved-comments": "value", "--sort": "value", "--limit": "value" },
     create: { "--title": "value", "--visibility": "value", "--share-with": "repeat", "--via": "value", "--summary": "value", "--file": "value", "--allow-empty": "boolean" },
     read: { "--view": "value", "--from": "value", "--to": "value", "--version": "value", "--raw": "boolean" },
     find: { "--space": "value", "--regex": "boolean", "--case-insensitive": "boolean", "--max": "value" },
@@ -742,6 +757,18 @@ async function documentCommand(command, argv) {
 
   context.source = credentialSource(options.agent);
 
+  if (command === "list") {
+    noExtraPositionals(positional, 0);
+    // Values pass through unchecked: the server's refusal names the bad one.
+    const entries = (options.role ?? []).map((role) => ["role", role]);
+    for (const [flag, query] of [["q", "q"], ["created-by", "createdBy"], ["active-since", "activeSince"], ["visibility", "visibility"], ["has-unresolved-comments", "hasUnresolvedComments"], ["sort", "sort"], ["limit", "limit"]]) {
+      if (options[flag] !== undefined) entries.push([query, options[flag]]);
+    }
+    const { data } = await callAuthenticated(context, queryPath("/api/documents", entries));
+    writeJson(data, context.compact);
+    return;
+  }
+
   if (command === "create") {
     noExtraPositionals(positional, 0);
     const visibility = oneOf(required(options.visibility, "--visibility <public|private>"), "--visibility", ["public", "private"]);
@@ -758,13 +785,13 @@ async function documentCommand(command, argv) {
       change: { summary: required(options.summary, "--summary <text>") },
     };
     // Create a document: create_doc has no idempotency key, so an uncertain call is not retried.
-    const { data } = await callAuthenticated(context, "/api/document", { method: "POST", body });
+    const { data } = await callAuthenticated(context, "/api/documents", { method: "POST", body });
     writeJson(data, context.compact);
     return;
   }
 
   const documentId = parseDocumentId(required(positional[0], "<doc>"));
-  const root = `/api/document/${documentId}`;
+  const root = `/api/documents/${documentId}`;
 
   if (command === "read") {
     noExtraPositionals(positional, 1);

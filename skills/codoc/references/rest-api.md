@@ -24,18 +24,24 @@ The scripts' `llms --section <name>` only filters this file client-side. Read th
 
 ## Read, find, edit
 
+Without a link, list the documents you hold a grant on. Filters narrow it; `role` repeats as `role=owner&role=editor`:
+
+```sh
+curl -sS "$BASE/api/documents?q=budget" -H "authorization: Bearer $KEY"
+```
+
 Overview first — version, sizes, title, comment counts — and bytes only when the task needs them:
 
 ```sh
-curl -sS "$BASE/api/document/$DOC" -H "authorization: Bearer $KEY"
-curl -sS "$BASE/api/document/$DOC?view=source&fromLine=1&toLine=80" -H "authorization: Bearer $KEY"
-curl -sS "$BASE/api/document/$DOC?view=text" -H "authorization: Bearer $KEY"
+curl -sS "$BASE/api/documents/$DOC" -H "authorization: Bearer $KEY"
+curl -sS "$BASE/api/documents/$DOC?view=source&fromLine=1&toLine=80" -H "authorization: Bearer $KEY"
+curl -sS "$BASE/api/documents/$DOC?view=text" -H "authorization: Bearer $KEY"
 ```
 
 `find` resolves edit targets in `source` space and capture evidence in `text` space. Never move a field from one space to the other:
 
 ```sh
-curl -sS -X POST "$BASE/api/document/$DOC/find" \
+curl -sS -X POST "$BASE/api/documents/$DOC/find" \
   -H 'content-type: application/json' -H "authorization: Bearer $KEY" \
   -d @find.json
 ```
@@ -43,33 +49,33 @@ curl -sS -X POST "$BASE/api/document/$DOC/find" \
 An edit sends every patch for the turn under one `baseVersion`, with an idempotency key you mint for this write. The receipt is the verification; do not read the document again to confirm it:
 
 ```sh
-curl -sS -X PATCH "$BASE/api/document/$DOC" \
+curl -sS -X PATCH "$BASE/api/documents/$DOC" \
   -H 'content-type: application/json' -H "authorization: Bearer $KEY" \
   -H "idempotency-key: $IDEMPOTENCY_KEY" \
   -d @edit.json
 ```
 
-`edit.json` is `{ "baseVersion": <n>, "patches": [{ "target": "…", "replacement": "…" }], "change": { "summary": "…" } }`, built with a JSON serializer. `change.summary` is required on create, edit, and write: a brief description of the change, equivalent to the git commit message for a repo. Add `"dryRun": true` to see target resolution, anchor effects, and sanitization without persisting anything.
+`edit.json` is `{ "baseVersion": <n>, "patches": [{ "target": "…", "replacement": "…" }], "change": { "summary": "…" } }`, built with a JSON serializer. `change.summary` is required on create, edit, and write: a brief description of the edit, similar to a git commit message. Add `"dryRun": true` to see target resolution, anchor effects, and sanitization without persisting anything.
 
 For edits and whole-document writes, `anchors.detached`, `detachedTotal`, and `byCause` cover open threads only. Fetch overflow with `state=detached&resolved=false`.
 
 ## Sharing
 
-Editors and owners can read member and agent names and roles with `GET $BASE/api/document/$DOC/access`; only owners can change access with `POST` to the same URL. In the browser, editors can open Share to inspect people, agents, and visibility and copy the link. Only owners receive email addresses and pending invitations. Send a JSON file carrying `addMembers: [{ "email": "editor@example.com", "role": "editor" }]` to invite an editor, or `setRoles: [{ "accountId": "<uuid>", "role": "editor" }]` to change an existing member's role. Assignable roles are `owner`, `editor`, and `commenter`; additions default to `commenter`. Editors can edit content and curate comments, while sharing, visibility changes, and document deletion require an owner. At least one owner must remain. Creating a document also accepts these roles in `shareWith`.
+Editors and owners can read member and agent names and roles with `GET $BASE/api/documents/$DOC/access`; only owners can change access with `POST` to the same URL. In the browser, editors can open Share to inspect people, agents, and visibility and copy the link. Only owners receive email addresses and pending invitations. Send a JSON file carrying `addMembers: [{ "email": "editor@example.com", "role": "editor" }]` to invite an editor, or `setRoles: [{ "accountId": "<uuid>", "role": "editor" }]` to change an existing member's role. Assignable roles are `owner`, `editor`, and `commenter`; additions default to `commenter`. Editors can edit content and curate comments, while sharing, visibility changes, and document deletion require an owner. At least one owner must remain. Creating a document also accepts these roles in `shareWith`.
 
 ## Comments
 
 Survey without bodies, check `total` and `truncated`, then read relevant full threads. Raise the full-read `limit` when the requested IDs exceed the page, and `replyLimit` when `repliesTruncated` is true. Paired agents can use `authoredByYourHuman` on full comments and replies to identify their verified human without an owner roster. `activeSince` selects threads with activity since a timestamp, including earlier messages in each selected thread; events with a saved cursor provide continuous catch-up. Array query parameters repeat the key:
 
 ```sh
-curl -sS "$BASE/api/document/$DOC/comments?view=overview&limit=50" -H "authorization: Bearer $KEY"
-curl -sS "$BASE/api/document/$DOC/comments?commentIds=$A&commentIds=$B" -H "authorization: Bearer $KEY"
+curl -sS "$BASE/api/documents/$DOC/comments?view=overview&limit=50" -H "authorization: Bearer $KEY"
+curl -sS "$BASE/api/documents/$DOC/comments?commentIds=$A&commentIds=$B" -H "authorization: Bearer $KEY"
 ```
 
 One batch carries the whole turn's mutations — `createReplies`, `setResolved`, `createComments`, `reanchorComments`, `react`, `editBodies`, deletions — in one transaction:
 
 ```sh
-curl -sS -X POST "$BASE/api/document/$DOC/comments/batch" \
+curl -sS -X POST "$BASE/api/documents/$DOC/comments/batch" \
   -H 'content-type: application/json' -H "authorization: Bearer $KEY" \
   -H "idempotency-key: $IDEMPOTENCY_KEY" \
   -d @batch.json
@@ -78,7 +84,7 @@ curl -sS -X POST "$BASE/api/document/$DOC/comments/batch" \
 To mention someone, list who you may mention and write the chosen `accountId` into a body as `<@accountId>`; the reference's Mentions section has the rules and refusals:
 
 ```sh
-curl -sS "$BASE/api/document/$DOC/mentionable?commentId=$A" -H "authorization: Bearer $KEY"
+curl -sS "$BASE/api/documents/$DOC/mentionable?commentId=$A" -H "authorization: Bearer $KEY"
 ```
 
 A new anchored comment copies `quote`, `occurrenceCount`, and `context` verbatim from a `find` in text space; the reference's worked example 3 shows the exact field mapping.
@@ -88,8 +94,8 @@ A new anchored comment copies `quote`, `occurrenceCount`, and `context` verbatim
 `watch.mjs` owns the attach sequence, the cursor, and `pollAfter`. Without it, follow the "Monitor for new activity" workflow in the reference exactly. The shape:
 
 ```sh
-curl -sS "$BASE/api/document/$DOC/events?since=now&waitSeconds=0" -H "authorization: Bearer $KEY"
-curl -sS "$BASE/api/document/$DOC/events?since=$CURSOR&waitSeconds=25&listening=true" -H "authorization: Bearer $KEY"
+curl -sS "$BASE/api/documents/$DOC/events?since=now&waitSeconds=0" -H "authorization: Bearer $KEY"
+curl -sS "$BASE/api/documents/$DOC/events?since=$CURSOR&waitSeconds=25&listening=true" -H "authorization: Bearer $KEY"
 ```
 
 Attach with `since=now` exactly once, take the baseline reads, then always send back the `nextCursor` you were last given. Wait at least the returned `pollAfter` seconds; stop when it says `"stop"`. Events carry comment ids, not bodies. Sharing changes are events too: everyone sees `visibility.changed`, and owners (and their paired agents) also see `member.added`, `member.removed`, `member.role_changed`, and `invite.created|updated|withdrawn|claimed`, which carry account ids, roles, and invitation addresses and no comment id. An action that changes nothing writes no event. Keep the cursor if the loop has to run from a background task, and never leave that task running when you are done.

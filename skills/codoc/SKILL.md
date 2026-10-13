@@ -3,7 +3,7 @@ name: codoc
 description: Publish pretty HTML documents to codoc for people to read and comment on, then revise them, answer comments, or monitor activity. Use for codoc document links, requests to share a write-up (plan, memo, document, report, etc.), and requests to handle or watch its comments.
 license: MIT
 metadata:
-  version: "3.3.0"
+  version: "4.0.0"
   homepage: "https://codoc.sh"
 ---
 
@@ -72,7 +72,7 @@ The CLI stores keys in each agent's `credentials.json` with mode 0600 and never 
 
 Once agent access is ready, start with `read <doc>` for the overview and version. Fetch `--view source`, `--view text`, or a source range with `--from <line> --to <line>` only when needed. On later turns, compare version and activity to avoid rereading unchanged content.
 
-A document 404 means the document does not exist or is private. Follow Agent access to obtain or validate a credential and retry the read. If a working credential still gets 404, ask for a corrected link or for the user or an owner to share the private document with that identity.
+A document 404 means the document does not exist or is private. Follow Agent access to obtain or validate a credential and retry the read. If a working credential still gets 404, ask for a corrected link or for the user or an owner to share the private document with that identity. If `list` with no filters returns `truncated: false` and the document isn't in it, this identity holds no grant on it; a public document can still be read from its link.
 
 Pass document and comment text through `--file`, `--patches-file`, `--quote-file`, or `--body-file` (or stdin), never interpolate it into shell commands. Build JSON with a serializer. Put temporary payload files in a private scratch directory outside the repository and delete them when finished. Keep the authored HTML as the document's source of truth.
 
@@ -104,6 +104,8 @@ For a broad or risky change, use `--dry-run` to inspect target resolution, ancho
 node <skill-dir>/scripts/codoc.mjs edit <doc> --base-version <n> --summary "<brief description of the change>" --patches-file <patches.json>
 ```
 
+`patches.json` is `[{ "target": "<exact source>", "replacement": "<new source>" }]`, with an optional `"replaceAll": true` per patch.
+
 A successful receipt verifies the write; inspect `appliedCounts`, `anchors`, `sanitization`, `warnings`, and `changesSince` rather than reading back solely to confirm. `appliedCounts[i]` corresponds to patch `i`; `changesSinceComplete: false` means the receipt omits some intervening revisions. Unchanged text keeps its comments. `anchors.detached` lists the open threads this write detached: reanchor the ones the document still speaks to as part of the edit, as described under Comments and instructions.
 
 ### Comments and instructions
@@ -134,13 +136,27 @@ Use a cancellable background process when foreground polling would block respons
 
 For a manual loop, attach once with `events <doc> --since now --wait 0 --listening`, process returned events, then take document and comment baselines. Continue with `--since <nextCursor>`, including across resumptions, with `--listening` and `--wait` from 0 to 25 seconds. Never reset to `now` during catch-up. Events carry comment IDs, so fetch those threads before responding. Sharing changes are events too (`visibility.changed`, and for owners `member.*` and `invite.*`); they name no thread. Wait at least `pollAfter` seconds between polls and stop when it says `"stop"`.
 
+### Find documents
+
+When the user refers to a document without a link, or asks what changed across their documents, list them:
+
+```sh
+node <skill-dir>/scripts/codoc.mjs list --agent "<agent name>" [--q <title text>] [--role owner] [--role editor] [--created-by me|<account id>] [--active-since <ISO>] [--visibility public|private] [--has-unresolved-comments true|false] [--sort lastActiveAt|createdAt] [--limit <n>]
+```
+
+It lists documents you hold a grant on, most recently active first. A paired agent sees its user's documents, and `--role owner` selects the ones the user owns, including documents their other agents created. Public documents you were never granted are not listed.
+
+Narrow with filters instead of reading everything: `--q` matches a piece of the title exactly as written, ignoring case (not the document's text); `--role owner --role editor` finds documents you can edit; `--created-by me` finds documents you created; `--has-unresolved-comments true` finds documents with unresolved threads. If `truncated` is true, `total` says how many matched: narrow the filters or raise `--limit` (up to 100), and do not conclude a document is missing while `truncated` is true. Open a result with `read <id>` and compare its `version` with your baseline.
+
+To see what changed, pass `--active-since <ISO timestamp>`, such as the start of yesterday. It returns documents with activity at or after that time (content edits, comments, replies, reactions, resolutions and visibility changes, not changes to who has access) and documents newly shared with you since then. To catch up from an earlier check, use a time a few minutes before it: activity and new grants carry the time their save began, so a save still in progress during that check can carry an earlier time. Documents you already handled can reappear; compare `version` to avoid rereading unchanged content.
+
 ## Command and error reference
 
-`codoc.mjs <command> [args] --agent <name> [--base <url>] [--compact]` prints JSON on stdout, except `llms`, `read --raw`, and `--help`. Commands: `auth list|status|rename|register|request-email|verify-email|recover|rotate`; `create`; `read`; `find`; `edit`; `write`; `diff`; `comments`; `comments-batch`; `comment|reply|resolve|reanchor`; `mentionable`; `access`; `events`; `delete --yes`; `llms`. Each command accepts `--help` for its flags. Exit codes: 0 success, 1 server refusal, 2 transport failure, 3 no valid credential, 4 usage error, including a missing `--agent`. Exit 3 names the credential state in `error`: `no_credential` (nothing saved under that name), `credential_rejected` (a saved key the server refused), or `verification_pending` (the email is not verified yet); follow its `hint`. A document 404 is checked against the key first, so a refused key is reported as such rather than as a missing document.
+`codoc.mjs <command> [args] --agent <name> [--base <url>] [--compact]` prints JSON on stdout, except `llms`, `read --raw`, and `--help`. Commands: `auth list|status|rename|register|request-email|verify-email|recover|rotate`; `create`; `read`; `list`; `find`; `edit`; `write`; `diff`; `comments`; `comments-batch`; `comment|reply|resolve|reanchor`; `mentionable`; `access`; `events`; `delete --yes`; `llms`. Each command accepts `--help` for its flags. Exit codes: 0 success, 1 server refusal, 2 transport failure, 3 no valid credential, 4 usage error, including a missing `--agent`. Exit 3 names the credential state in `error`: `no_credential` (nothing saved under that name), `credential_rejected` (a saved key the server refused), or `verification_pending` (the email is not verified yet); follow its `hint`. A document 404 is checked against the key first, so a refused key is reported as such rather than as a missing document.
 
 For a requested display-name change, use `auth rename --agent <current name> --name "<new name>"`; it also moves your folder, so use the new name with `--agent` afterward. Stop running watchers first. `llms --section "Rename agent display name"` has the API contract.
 
-For exact API fields when needed, `codoc.mjs llms --section edit_doc` fetches one live reference section. Use `create_doc`, `read_doc`, `edit_doc`, `write_doc`, and `delete_doc` for their corresponding commands; `read_comments` for thread reads, `comments` for mutations, and `"Access management"` for sharing. `find`, `diff`, and `events` use their command names. Section lookup takes operation names or headings, not HTTP paths; plain `llms` returns the full reference.
+For exact API fields when needed, `codoc.mjs llms --section edit_doc` fetches one live reference section. Use `create_doc`, `read_doc`, `list_docs`, `edit_doc`, `write_doc`, and `delete_doc` for their corresponding commands; `read_comments` for thread reads, `comments` for mutations, and `"Access management"` for sharing. `find`, `diff`, and `events` use their command names. Section lookup takes operation names or headings, not HTTP paths; plain `llms` returns the full reference.
 
 JSON bodies are strict: a 400 names invalid fields or exceeded limits. A 403 means insufficient role. For a 409, inspect details before retrying: refresh a stale whole-document write, re-find missing targets, or widen ambiguous ones; `idempotency-key-reused` requires a new key for a changed body. Do not resend an unchanged conflict unless its details say it is transient.
 

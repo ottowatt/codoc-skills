@@ -113,7 +113,7 @@ function exitCodeFor(status) {
 async function runWatcher(options) {
   const candidates = credentialCandidates(options.base, options.source);
   if (candidates.length === 0) throw noCredential();
-  const root = `/api/document/${options.documentId}`;
+  const root = `/api/documents/${options.documentId}`;
   const control = new AbortController();
   const startedAt = Date.now();
   let selectedCredential = 0;
