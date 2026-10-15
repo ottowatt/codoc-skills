@@ -3,7 +3,7 @@ name: codoc
 description: Publish pretty HTML documents to codoc for people to read and comment on, then revise them, answer comments, or monitor activity. Use for codoc document links, requests to share a write-up (plan, memo, document, report, etc.), and requests to handle or watch its comments.
 license: MIT
 metadata:
-  version: "4.0.0"
+  version: "4.1.0"
   homepage: "https://codoc.sh"
 ---
 
@@ -21,7 +21,7 @@ Public documents allow anonymous reads of current content and comments; commenti
 
 Agent and human accounts pair automatically when both verify the same email, including if the human signs up later. Pairing preserves the agent ID, key, and authorship, transfers its grants and document ownership to the human, and retains the stronger role where both had access. A pair cannot be reassigned or made independent. Disconnecting invalidates the agent's keys while preserving its contribution history; recovery can restore the connection.
 
-Owners manage sharing and can edit or delete documents; editors can edit content; commenters can comment and reply; viewers can read. History, retained versions, and diffs require editor or owner access even for public documents. New grants may assign owner, editor, or commenter, and at least one owner must remain.
+Owners manage sharing and can edit or delete documents; editors can edit content and rename documents; commenters can comment and reply; viewers can read. History, retained versions, and diffs require editor or owner access even for public documents. New grants may assign owner, editor, or commenter, and at least one owner must remain.
 
 `access <doc>` returns visibility and your role; editors and owners also receive member and agent names and roles. Only owners receive email addresses and pending invitations. Editors can inspect the Share sheet and copy the link; only owners can change access. Independent agents with grants appear before contributing and have editable roles. Paired agents appear after contributing while their connection and human's membership are active; change the human's role to change theirs. Public commenters without membership are absent from this roster. Use `access` to add members by email, revoke invitations, change visibility, or remove/change existing members by account ID. New grants trigger a notice.
 
@@ -86,7 +86,7 @@ The document scrolls inside an iframe. Desktop comments occupy a right rail and 
 
 Read [the document writing guide](references/writing/document.md) before drafting HTML; for market research also read [its specific guide](references/writing/market-research.md). Maintain one complete HTML file with semantic structure, embedded CSS, and line breaks at element boundaries. Write for the document's purpose and requested tone; use clear claims, decisions, and criteria, and remove obsolete draft fragments.
 
-Create private documents by default; use public only when requested or clearly required. Use repeatable `--share-with <email[:commenter|editor|owner]>` for additional collaborators; the role defaults to commenter. The creation title is authoritative: changing the source `<title>` later does not rename the document.
+Create private documents by default; use public only when requested or clearly required. Use repeatable `--share-with <email[:commenter|editor|owner]>` for additional collaborators; the role defaults to commenter. The creation title is authoritative: changing the source `<title>` later does not rename the document; `rename` does (see Edit).
 
 ```sh
 node <skill-dir>/scripts/codoc.mjs create --title "<title>" --visibility private --summary "<brief description of the change>" --file <path.html>
@@ -107,6 +107,14 @@ node <skill-dir>/scripts/codoc.mjs edit <doc> --base-version <n> --summary "<bri
 `patches.json` is `[{ "target": "<exact source>", "replacement": "<new source>" }]`, with an optional `"replaceAll": true` per patch.
 
 A successful receipt verifies the write; inspect `appliedCounts`, `anchors`, `sanitization`, `warnings`, and `changesSince` rather than reading back solely to confirm. `appliedCounts[i]` corresponds to patch `i`; `changesSinceComplete: false` means the receipt omits some intervening revisions. Unchanged text keeps its comments. `anchors.detached` lists the open threads this write detached: reanchor the ones the document still speaks to as part of the edit, as described under Comments and instructions.
+
+To change only the title, use `rename`. It changes the name on the reading page and in `list` without creating a version, so it takes no base version and detaches no threads. Rename when the user asks or the document's subject has changed; people also rename from the reading page.
+
+```sh
+node <skill-dir>/scripts/codoc.mjs rename <doc> --title "<new title>"
+```
+
+The receipt is the title as stored, which may differ in spacing from what you sent; a blank title is refused.
 
 ### Comments and instructions
 
@@ -134,7 +142,7 @@ When asked to watch, or after the user accepts the offer, use `node <skill-dir>/
 
 Use a cancellable background process when foreground polling would block responses. Use `--follow` only when the host can stream its JSON Lines to you. Output types are `baseline`, `resume`, `event`, `notice`, and `exit`; an `event` includes the server event and fetched threads. Treat `exit.reason: "stop"` as the end of monitoring. Stop any running watcher when the user ends the task or the session ends. For a blocking foreground host, set `--max-seconds` below its command timeout; use `--mode poll` if held requests fail. Do not start two watchers for one document.
 
-For a manual loop, attach once with `events <doc> --since now --wait 0 --listening`, process returned events, then take document and comment baselines. Continue with `--since <nextCursor>`, including across resumptions, with `--listening` and `--wait` from 0 to 25 seconds. Never reset to `now` during catch-up. Events carry comment IDs, so fetch those threads before responding. Sharing changes are events too (`visibility.changed`, and for owners `member.*` and `invite.*`); they name no thread. Wait at least `pollAfter` seconds between polls and stop when it says `"stop"`.
+For a manual loop, attach once with `events <doc> --since now --wait 0 --listening`, process returned events, then take document and comment baselines. Continue with `--since <nextCursor>`, including across resumptions, with `--listening` and `--wait` from 0 to 25 seconds. Never reset to `now` during catch-up. Events carry comment IDs, so fetch those threads before responding. Sharing changes are events too (`visibility.changed`, and for owners `member.*` and `invite.*`); they name no thread. A rename emits `document.renamed`, which also names no thread; read the overview for the new title. Wait at least `pollAfter` seconds between polls and stop when it says `"stop"`.
 
 ### Find documents
 

@@ -58,6 +58,7 @@ Commands:
   resolve <doc> --comment <uuid>       resolve or unresolve one thread
   mentionable <doc> [--comment <uuid>] list the accounts you may mention in comments
   access <doc>                         read or change document access
+  rename <doc> --title <t>             change the document's title
   events <doc>                         perform one raw event poll
   delete <doc> --yes                   irreversibly delete a document
   llms [--section <name>]              print the live API reference or one operation block
@@ -275,6 +276,12 @@ const COMMAND_HELP = {
   --compact                    print compact JSON
   --timeout <s>                request timeout; default 30
   --help                       show this help`,
+  rename: `Usage: codoc.mjs rename <doc> --title <text>
+  --title <text>  the new title; the version and source <title> do not change
+  --base <url>    API origin
+  --compact       print compact JSON
+  --timeout <s>   request timeout; default 30
+  --help          show this help`,
   events: `Usage: codoc.mjs events <doc> [options]
   --since now|<cursor>  attach point or returned cursor
   --wait <0-25>         long-poll seconds; default 0
@@ -734,6 +741,7 @@ async function documentCommand(command, argv) {
     resolve: { "--comment": "value", "--unresolve": "boolean", "--idempotency-key": "value" },
     mentionable: { "--comment": "value" },
     access: { "--add": "repeat", "--remove": "repeat", "--revoke-invite": "repeat", "--set-role": "repeat", "--visibility": "value" },
+    rename: { "--title": "value" },
     events: { "--since": "value", "--wait": "value", "--listening": "boolean", "--exclude-self": "boolean" },
     delete: { "--yes": "boolean" },
     llms: { "--section": "value" },
@@ -1025,6 +1033,14 @@ async function documentCommand(command, argv) {
     });
     if (options.visibility) body.setVisibility = oneOf(options.visibility, "--visibility", ["public", "private"]);
     const { data } = await callAuthenticated(context, `${root}/access`, { method: "POST", body });
+    writeJson(data, context.compact);
+    return;
+  }
+
+  if (command === "rename") {
+    noExtraPositionals(positional, 1);
+    const body = { title: required(options.title, "--title <text>") };
+    const { data } = await callAuthenticated(context, `${root}/title`, { method: "PUT", body });
     writeJson(data, context.compact);
     return;
   }

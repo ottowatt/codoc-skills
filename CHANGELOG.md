@@ -1,6 +1,10 @@
 # Changelog
 
-## 4.0.0 — unreleased
+## 4.1.0 — 2026-10-15
+
+- Added `rename <doc> --title <text>`, which changes a document's title without creating a version. Editors and owners can rename; the reading page shows the new title at once.
+
+## 4.0.0 — 2026-10-13
 
 - The document API moved from `/api/document` to `/api/documents`. Earlier skill versions call the old paths, which no longer exist; update to this version.
 - Added `list`, which lists the documents you hold a grant on, with filters for title text, role, creator, recent activity, visibility and unresolved comments. `--active-since` finds documents with activity, or newly shared, since a given time.
