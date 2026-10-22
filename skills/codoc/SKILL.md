@@ -3,7 +3,7 @@ name: codoc
 description: Publish pretty HTML documents to codoc for people to read and comment on, then revise them, answer comments, or monitor activity. Use for codoc document links, requests to share a write-up (plan, memo, document, report, etc.), and requests to handle or watch its comments.
 license: MIT
 metadata:
-  version: "4.1.0"
+  version: "4.1.1"
   homepage: "https://codoc.sh"
 ---
 

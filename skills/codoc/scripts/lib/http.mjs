@@ -1,6 +1,9 @@
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { CliError, credentialRefused, internalFailure, noCredential, redact } from "./output.mjs";
+import { CliError, credentialRefused, diagnostic, internalFailure, noCredential, redact } from "./output.mjs";
+
+const MAX_TIMER_MS = 2 ** 31 - 1;
+const MAX_AUTOMATIC_RETRY_MS = 60_000;
 
 function retryDelayOverride(milliseconds) {
   const override = Number(process.env.CODOC_TEST_RETRY_DELAY_MS);
@@ -9,18 +12,50 @@ function retryDelayOverride(milliseconds) {
 
 export function retryAfterMilliseconds(response, fallback = 0) {
   const raw = response.headers.get("retry-after");
-  if (!raw) return fallback;
+  if (!raw) return finiteDelay(fallback, 0);
   const seconds = Number(raw);
   const milliseconds = Number.isFinite(seconds)
     ? seconds * 1000
     : Math.max(0, Date.parse(raw) - Date.now());
-  if (!Number.isFinite(milliseconds)) return fallback;
-  return Math.min(30_000, Math.max(0, milliseconds));
+  return finiteDelay(milliseconds, fallback);
 }
 
 function finiteDelay(milliseconds, fallback) {
-  const safe = Number.isFinite(milliseconds) && milliseconds >= 0 ? milliseconds : fallback;
-  return Math.ceil(safe);
+  const safe = Number.isNaN(milliseconds) ? fallback : milliseconds;
+  return Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.ceil(safe)));
+}
+
+// Node turns an overflowing timer into a 1ms wait. Split long delays instead of
+// retrying before the server permits; each chunk remains cancellable.
+export async function interruptibleSleep(milliseconds, signal) {
+  let remaining = finiteDelay(milliseconds, 0);
+  while (remaining > 0) {
+    const chunk = Math.min(remaining, MAX_TIMER_MS);
+    await sleep(chunk, undefined, { signal });
+    remaining -= chunk;
+  }
+  signal?.throwIfAborted();
+}
+
+async function waitBeforeRetry(result, milliseconds, options) {
+  const delay = finiteDelay(retryDelayOverride(milliseconds), 2000);
+  reportRetry(result, delay, true);
+  try {
+    await interruptibleSleep(delay, options.signal);
+  } catch (error) {
+    throw new CliError(2, { error: "transport", message: transportMessage(error, options.signal) });
+  }
+}
+
+function reportRetry(result, milliseconds, waiting) {
+  const code = typeof result.data?.error === "string" ? ` (${result.data.error})` : "";
+  const message = typeof result.data?.message === "string" ? `: ${result.data.message}` : "";
+  const failure = result.transportError?.message ?? `HTTP ${result.status}${code}${message}`;
+  const requested = result.headers?.get("retry-after");
+  const action = waiting
+    ? `Waiting ${milliseconds / 1000} seconds before retrying. Press Ctrl+C to cancel.`
+    : `Requested wait of ${milliseconds / 1000} seconds exceeds the ${MAX_AUTOMATIC_RETRY_MS / 1000}-second automatic retry limit; returning the error without retrying.`;
+  diagnostic(`${failure}\n${requested ? `Server Retry-After: ${requested}. ` : ""}${action}`);
 }
 
 function safeToRetry(method, idempotencyKey) {
@@ -28,7 +63,8 @@ function safeToRetry(method, idempotencyKey) {
   return method === "GET" || Boolean(idempotencyKey);
 }
 
-function transportMessage(error) {
+function transportMessage(error, signal) {
+  if (signal?.aborted) return "The request was cancelled.";
   if (error?.name === "TimeoutError" || error?.name === "AbortError") return "The request timed out.";
   return redact(error instanceof Error ? error.message : String(error));
 }
@@ -65,7 +101,7 @@ export async function requestOnce(base, pathname, options = {}) {
     return {
       transportError: {
         error: "transport",
-        message: options.sensitiveResponse ? "The credential request could not be completed." : transportMessage(error),
+        message: options.sensitiveResponse ? "The credential request could not be completed." : transportMessage(error, options.signal),
       },
     };
   }
@@ -102,19 +138,24 @@ export async function request(base, pathname, options = {}) {
     const result = await requestOnce(base, pathname, options);
     if (result.internalError) throw new CliError(1, result.internalError);
     if (result.transportError) {
-      if (mayRetry && attempts === 0) {
+      if (mayRetry && attempts === 0 && !options.signal?.aborted) {
         attempts += 1;
-        await sleep(finiteDelay(retryDelayOverride(2000), 2000));
+        await waitBeforeRetry(result, 2000, options);
         continue;
       }
       throw new CliError(2, result.transportError);
     }
     if (mayRetry && attempts === 0 && (result.status === 503 || result.status === 429)) {
+      const delay = retryAfterMilliseconds(result, 2000);
+      if (delay > MAX_AUTOMATIC_RETRY_MS) {
+        reportRetry(result, delay, false);
+        const data = result.data && typeof result.data === "object" && !Array.isArray(result.data)
+          ? result.data
+          : { error: result.status === 429 ? "rate_limited" : "service_unavailable", message: `HTTP ${result.status}` };
+        return { ...result, data: { ...data, retryAfterSeconds: Math.ceil(delay / 1000) } };
+      }
       attempts += 1;
-      const delay = result.status === 429
-        ? retryAfterMilliseconds(result, retryDelayOverride(2000))
-        : retryDelayOverride(2000);
-      await sleep(finiteDelay(delay, 2000));
+      await waitBeforeRetry(result, delay, options);
       continue;
     }
     return result;

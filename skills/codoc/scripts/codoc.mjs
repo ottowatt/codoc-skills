@@ -356,13 +356,25 @@ async function refuseIfKeyRejected(context, key) {
   throw credentialRefused({ agent, pending: pendingVerification || check.data?.verificationPending === true });
 }
 
+// Agent shells can pass an open, non-blocking stdin with nothing in it; that is no input, not an error.
+function pipedStdin() {
+  if (process.stdin.isTTY) return "";
+  try {
+    return fs.readFileSync(0, "utf8");
+  } catch (error) {
+    if (error.code !== "EAGAIN") throw error;
+    diagnostic("stdin is open but has nothing to read (EAGAIN); treating it as empty.");
+    return "";
+  }
+}
+
 function parseJsonInput(filename, description) {
   let text;
   try {
     if (!filename) {
       text = fs.readFileSync(0, "utf8");
     } else {
-      const stdin = process.stdin.isTTY ? "" : fs.readFileSync(0, "utf8");
+      const stdin = pipedStdin();
       if (stdin.length > 0) throw usage(`${description} was provided by both --file and stdin.`);
       text = fs.readFileSync(filename, "utf8");
     }
@@ -380,7 +392,7 @@ function parseJsonInput(filename, description) {
 function readTextInput(filename, description) {
   try {
     if (!filename) return fs.readFileSync(0, "utf8");
-    const stdin = process.stdin.isTTY ? "" : fs.readFileSync(0, "utf8");
+    const stdin = pipedStdin();
     if (stdin.length > 0) throw usage(`${description} was provided by both --file and stdin.`);
     return fs.readFileSync(filename, "utf8");
   } catch (error) {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 4.1.1 — 2026-10-21
+
+- Commands now report transient errors and the requested wait on stderr before retrying. Reads and keyed mutations retry once when the delay is at most 60 seconds; longer waits return the JSON refusal immediately with `retryAfterSeconds` so the caller can decide when to try again.
+- Retry waits honor the full delay instead of shortening it to 30 seconds, support cancellation, and apply the test delay override to numeric `Retry-After` values. Watchers retain their follow/max-seconds lifecycle and report retry notices.
+- `--file` and `--patches-file` no longer fail with `Could not read … EAGAIN` when an agent shell leaves stdin as an open, empty, non-blocking pipe; that now counts as no stdin input.
+
 ## 4.1.0 — 2026-10-15
 
 - Added `rename <doc> --title <text>`, which changes a document's title without creating a version. Editors and owners can rename; the reading page shows the new title at once.

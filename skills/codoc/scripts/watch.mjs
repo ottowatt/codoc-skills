@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-import { setTimeout as sleep } from "node:timers/promises";
-
 import { parseArgs, required, number, oneOf, noExtraPositionals } from "./lib/args.mjs";
 import {
   credentialCandidates,
@@ -10,7 +8,7 @@ import {
   writeWatchState,
 } from "./lib/credentials.mjs";
 import { parseDocumentId } from "./lib/doc-id.mjs";
-import { requestOnce, retryAfterMilliseconds } from "./lib/http.mjs";
+import { interruptibleSleep, requestOnce, retryAfterMilliseconds } from "./lib/http.mjs";
 import {
   CliError,
   credentialRefused,
@@ -88,13 +86,13 @@ function testBackoff(milliseconds) {
   return Number.isFinite(override) && override >= 0 ? override : milliseconds;
 }
 
-async function interruptibleSleep(milliseconds, control, fallbackMilliseconds = 5000) {
+async function watchSleep(milliseconds, control, fallbackMilliseconds = 5000) {
   const safe = Number.isFinite(milliseconds) && milliseconds >= 0
     ? milliseconds
     : fallbackMilliseconds;
   if (safe <= 0) return;
   try {
-    await sleep(Math.ceil(safe), undefined, { signal: control.signal });
+    await interruptibleSleep(Math.ceil(safe), control.signal);
   } catch (error) {
     if (!control.signal.aborted) throw error;
   }
@@ -165,7 +163,7 @@ async function runWatcher(options) {
     const allowed = remaining === undefined
       ? finite
       : Math.min(finite, Math.max(0, remaining * 1000));
-    await interruptibleSleep(allowed, control, fallbackMilliseconds);
+    await watchSleep(allowed, control, fallbackMilliseconds);
   };
 
   async function authenticatedOnce(pathname, requestOptions = {}) {
@@ -200,9 +198,9 @@ async function runWatcher(options) {
       if (result.transportError || result.status === 429 || result.status === 503) {
         const terminated = checkTermination();
         if (terminated !== undefined) return { terminated };
-        const waitMilliseconds = result.transportError
+        const waitMilliseconds = testBackoff(result.transportError
           ? backoffMilliseconds
-          : retryAfterMilliseconds(result, backoffMilliseconds);
+          : retryAfterMilliseconds(result, backoffMilliseconds));
         writeJsonLine({
           type: "notice",
           message: result.transportError?.message ?? `HTTP ${result.status}; retrying the same cursor.`,
