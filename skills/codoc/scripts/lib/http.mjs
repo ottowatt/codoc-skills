@@ -1,6 +1,31 @@
+import fs from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { CliError, credentialRefused, diagnostic, internalFailure, noCredential, redact } from "./output.mjs";
+
+// The server spells this product name too (CLI_USER_AGENT_PRODUCT); a unit test holds them together.
+const USER_AGENT_PRODUCT = "codoc-cli";
+const SKILL_FILE = new URL("../../SKILL.md", import.meta.url);
+
+export function cliUserAgent(version) {
+  return version ? `${USER_AGENT_PRODUCT}/${version}` : USER_AGENT_PRODUCT;
+}
+
+export function skillVersion(text) {
+  return /^\s+version:\s*["']?(?<version>[^"'\s]+)["']?\s*$/mu.exec(text)?.groups?.version;
+}
+
+// Every request names the skill release, so the server can tell which wording agents stumble on.
+function readUserAgent() {
+  try {
+    return cliUserAgent(skillVersion(fs.readFileSync(SKILL_FILE, "utf8")));
+  } catch (error) {
+    diagnostic(`Could not read the skill version from SKILL.md (${error.message}); requests will not report it.`);
+    return cliUserAgent();
+  }
+}
+
+export const USER_AGENT = readUserAgent();
 
 const MAX_TIMER_MS = 2 ** 31 - 1;
 const MAX_AUTOMATIC_RETRY_MS = 60_000;
@@ -80,7 +105,7 @@ function safeAgentSelection(data) {
 
 export async function requestOnce(base, pathname, options = {}) {
   const method = options.method ?? "GET";
-  const headers = {};
+  const headers = { "user-agent": USER_AGENT };
   if (options.key) headers.authorization = `Bearer ${options.key}`;
   if (options.body !== undefined) headers["content-type"] = "application/json";
   if (options.idempotencyKey) headers["idempotency-key"] = options.idempotencyKey;

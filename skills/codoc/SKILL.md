@@ -3,7 +3,7 @@ name: codoc
 description: Publish pretty HTML documents to codoc for people to read and comment on, then revise them, answer comments, or monitor activity. Use for codoc document links, requests to share a write-up (plan, memo, document, report, etc.), and requests to handle or watch its comments.
 license: MIT
 metadata:
-  version: "4.1.1"
+  version: "4.2.0"
   homepage: "https://codoc.sh"
 ---
 
@@ -14,6 +14,8 @@ codoc.sh is a shared document surface: agents publish HTML, people read and comm
 **Use the CLI or REST API for all codoc work. Do not use the browser unless the user explicitly asks you to use it.** Codoc is agent-first: its APIs support every browser action and additional agent operations. A person's browser session does not authenticate an agent.
 
 Run commands as `node <skill-dir>/scripts/codoc.mjs <command>`; Bun also works. The server is selected by `--base`, then `CODOC_BASE`, then `https://codoc.sh`. Pass `--agent <your name>` to every command except `auth register`, `auth list`, and `llms`, including `watch.mjs`; several agents can share one computer, and the flag chooses which one acts. For a document URL at another origin, pass `--base <origin>` to every command, including authentication and monitoring: the CLI extracts the document ID from a URL but does not select its server. CLI document commands require an agent key. On hosts without Node or Bun, follow the same account and document workflow through [the REST guide](references/rest-api.md).
+
+**Feedback.** When the user asks for something codoc can't do, when codoc can't do what you need, fails, misleads you, or takes far more calls than it should, or when you see a way it could work better, send `feedback`: one report per problem, once you know how it turned out. You don't need to ask the user first; `feedback --help` lists the fields.
 
 ## Identity and sharing
 
@@ -160,7 +162,7 @@ To see what changed, pass `--active-since <ISO timestamp>`, such as the start of
 
 ## Command and error reference
 
-`codoc.mjs <command> [args] --agent <name> [--base <url>] [--compact]` prints JSON on stdout, except `llms`, `read --raw`, and `--help`. Commands: `auth list|status|rename|register|request-email|verify-email|recover|rotate`; `create`; `read`; `list`; `find`; `edit`; `write`; `diff`; `comments`; `comments-batch`; `comment|reply|resolve|reanchor`; `mentionable`; `access`; `events`; `delete --yes`; `llms`. Each command accepts `--help` for its flags. Exit codes: 0 success, 1 server refusal, 2 transport failure, 3 no valid credential, 4 usage error, including a missing `--agent`. Exit 3 names the credential state in `error`: `no_credential` (nothing saved under that name), `credential_rejected` (a saved key the server refused), or `verification_pending` (the email is not verified yet); follow its `hint`. A document 404 is checked against the key first, so a refused key is reported as such rather than as a missing document.
+`codoc.mjs <command> [args] --agent <name> [--base <url>] [--compact]` prints JSON on stdout, except `llms`, `read --raw`, and `--help`. Commands: `auth list|status|rename|register|request-email|verify-email|recover|rotate`; `create`; `read`; `list`; `find`; `edit`; `write`; `diff`; `comments`; `comments-batch`; `comment|reply|resolve|reanchor`; `mentionable`; `access`; `events`; `delete --yes`; `feedback`; `llms`. Each command accepts `--help` for its flags. Exit codes: 0 success, 1 server refusal, 2 transport failure, 3 no valid credential, 4 usage error, including a missing `--agent`. Exit 3 names the credential state in `error`: `no_credential` (nothing saved under that name), `credential_rejected` (a saved key the server refused), or `verification_pending` (the email is not verified yet); follow its `hint`. A document 404 is checked against the key first, so a refused key is reported as such rather than as a missing document.
 
 For a requested display-name change, use `auth rename --agent <current name> --name "<new name>"`; it also moves your folder, so use the new name with `--agent` afterward. Stop running watchers first. `llms --section "Rename agent display name"` has the API contract.
 
@@ -168,4 +170,4 @@ For exact API fields when needed, `codoc.mjs llms --section edit_doc` fetches on
 
 JSON bodies are strict: a 400 names invalid fields or exceeded limits. A 403 means insufficient role. For a 409, inspect details before retrying: refresh a stale whole-document write, re-find missing targets, or widen ambiguous ones; `idempotency-key-reused` requires a new key for a changed body. Do not resend an unchanged conflict unless its details say it is transient.
 
-The CLI adds idempotency keys to edits, writes, and comment mutations and retries reads and keyed mutations once on 429 or 503, honoring `Retry-After`. After an ambiguous keyed mutation, resend the identical body using the returned `idempotencyKey` with `--idempotency-key`; the server replays a committed receipt. Failed validations, conflicts, and dry runs do not consume a key. Stop after repeated refusals and report the problem. `delete --yes` permanently removes the document, history, comments, access, and events; it is owner only.
+The CLI adds idempotency keys to edits, writes, and comment mutations and retries reads and keyed mutations once on 429 or 503, honoring `Retry-After`. After an ambiguous keyed mutation, resend the identical body using the returned `idempotencyKey` with `--idempotency-key`; the server replays a committed receipt. Failed validations, conflicts, and dry runs do not consume a key. Stop after repeated refusals, tell the user, and send `feedback`. `delete --yes` permanently removes the document, history, comments, access, and events; it is owner only.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.2.0 — 2026-11-10
+
+- Added `feedback`, which tells codoc's team where codoc fell short: something missing, broken, confusing or costly, or an idea. One report per problem, once you know how the task turned out; `feedback --help` lists the fields. Each account may send 10 reports a day.
+- Every request now sends `User-Agent: codoc-cli/<version>`, so the server can tell which skill release made a call.
+
 ## 4.1.1 — 2026-10-21
 
 - Commands now report transient errors and the requested wait on stderr before retrying. Reads and keyed mutations retry once when the delay is at most 60 seconds; longer waits return the JSON refusal immediately with `retryAfterSeconds` so the caller can decide when to try again.

@@ -59,6 +59,7 @@ Commands:
   mentionable <doc> [--comment <uuid>] list the accounts you may mention in comments
   access <doc>                         read or change document access
   rename <doc> --title <t>             change the document's title
+  feedback --kind <k> --outcome <o> --summary <s>  tell codoc's team where codoc fell short
   events <doc>                         perform one raw event poll
   delete <doc> --yes                   irreversibly delete a document
   llms [--section <name>]              print the live API reference or one operation block
@@ -282,6 +283,29 @@ const COMMAND_HELP = {
   --compact       print compact JSON
   --timeout <s>   request timeout; default 30
   --help          show this help`,
+  feedback: `Usage: codoc.mjs feedback --kind <kind> --outcome <outcome> --summary <text> [options]
+  Tell codoc's team where codoc fell short of what you or the user needed. Send one
+  report per problem, once you know how it turned out; no need to ask the user first.
+  --kind <kind>          missing    codoc can't do what you or the user needed
+                         broken     it failed or misbehaved
+                         confusing  a response, error or the guide misled you or took retries
+                         costly     it worked but took far more calls, bytes or time than it should
+                         idea       it worked, but this task shows how it could work better
+  --outcome <outcome>    how the task ended: blocked, worked_around, or completed
+  --summary <text>       one line
+  --user-request <text>  what the user asked for that codoc couldn't do, in general terms
+  --details <text>       what you tried, what happened, what you expected
+  --workaround <text>    what you did instead, including extra calls
+  --suggestion <text>    what would have helped
+  --area <area>          documents, editing, comments, monitoring, access, account,
+                         rendering, guide (the skill or API reference), or other
+  --doc <doc>            the document involved, by URL or ID
+  --file <path>          read the whole report as a JSON object with the same fields in
+                         camelCase (userRequest, documentId) instead of the flags above
+  --base <url>           API origin
+  --compact              print compact JSON
+  --timeout <s>          request timeout; default 30
+  --help                 show this help`,
   events: `Usage: codoc.mjs events <doc> [options]
   --since now|<cursor>  attach point or returned cursor
   --wait <0-25>         long-poll seconds; default 0
@@ -736,6 +760,35 @@ function parseShareRecipient(value, flag) {
   return { email, role };
 }
 
+const FEEDBACK_FLAGS = [
+  ["kind", "kind"],
+  ["outcome", "outcome"],
+  ["summary", "summary"],
+  ["user-request", "userRequest"],
+  ["details", "details"],
+  ["workaround", "workaround"],
+  ["suggestion", "suggestion"],
+  ["area", "area"],
+];
+
+// Values pass through unchecked: the server's refusal names the bad one.
+function feedbackBody(options) {
+  if (options.file !== undefined) {
+    const flags = [...FEEDBACK_FLAGS.map(([flag]) => flag), "doc"].filter((flag) => options[flag] !== undefined);
+    if (flags.length > 0) throw usage(`--file holds the whole report; drop --${flags.join(", --")}.`);
+    return parseJsonInput(options.file, "Feedback report");
+  }
+  required(options.kind, "--kind <missing|broken|confusing|costly|idea>");
+  required(options.outcome, "--outcome <blocked|worked_around|completed>");
+  required(options.summary, "--summary <text>");
+  const body = {};
+  for (const [flag, field] of FEEDBACK_FLAGS) {
+    if (options[flag] !== undefined) body[field] = options[flag];
+  }
+  if (options.doc !== undefined) body.documentId = parseDocumentId(options.doc);
+  return body;
+}
+
 async function documentCommand(command, argv) {
   const specs = {
     list: { "--q": "value", "--role": "repeat", "--created-by": "value", "--active-since": "value", "--visibility": "value", "--has-unresolved-comments": "value", "--sort": "value", "--limit": "value" },
@@ -754,6 +807,7 @@ async function documentCommand(command, argv) {
     mentionable: { "--comment": "value" },
     access: { "--add": "repeat", "--remove": "repeat", "--revoke-invite": "repeat", "--set-role": "repeat", "--visibility": "value" },
     rename: { "--title": "value" },
+    feedback: { "--kind": "value", "--outcome": "value", "--summary": "value", "--user-request": "value", "--details": "value", "--workaround": "value", "--suggestion": "value", "--area": "value", "--doc": "value", "--file": "value" },
     events: { "--since": "value", "--wait": "value", "--listening": "boolean", "--exclude-self": "boolean" },
     delete: { "--yes": "boolean" },
     llms: { "--section": "value" },
@@ -806,6 +860,13 @@ async function documentCommand(command, argv) {
     };
     // Create a document: create_doc has no idempotency key, so an uncertain call is not retried.
     const { data } = await callAuthenticated(context, "/api/documents", { method: "POST", body });
+    writeJson(data, context.compact);
+    return;
+  }
+
+  if (command === "feedback") {
+    noExtraPositionals(positional, 0);
+    const { data } = await callAuthenticated(context, "/api/feedback", { method: "POST", body: feedbackBody(options) });
     writeJson(data, context.compact);
     return;
   }

@@ -104,8 +104,16 @@ Attach with `since=now` exactly once, take the baseline reads, then always send 
 
 - Bodies come from files (`-d @file`) built with a JSON serializer, so text lifted from the document never touches shell source.
 - Mutations carry a fresh `idempotency-key`. After an ambiguous outcome, resend the identical body under the same key and the server replays the committed receipt instead of writing twice. `create_doc` has no key; a retry may create a second document.
-- Reads and keyed mutations retry 429 and 503 once when `Retry-After` is at most 60 seconds. The command prints the refusal and wait on stderr before sleeping; it can be interrupted. Longer waits return the JSON refusal immediately with `retryAfterSeconds`; schedule or retry later rather than looping. A second refusal means back off and tell the user. Watchers follow their separate follow/max-seconds lifecycle and emit retry notices.
+- Reads and keyed mutations retry 429 and 503 once when `Retry-After` is at most 60 seconds. The command prints the refusal and wait on stderr before sleeping; it can be interrupted. Longer waits return the JSON refusal immediately with `retryAfterSeconds`; schedule or retry later rather than looping. A second refusal means back off, tell the user, and send feedback. Watchers follow their separate follow/max-seconds lifecycle and emit retry notices.
 - Errors are JSON on the response body with `error`, `message`, and details. Read the details before doing anything else; a 409 says whether to re-`find` targets or mint a new key.
+
+## Feedback
+
+When the user asks for something codoc can't do, when codoc can't do what you need, fails, misleads you, or takes far more calls than it should, or when you see a way it could work better, send one report per problem to `POST /api/feedback`, once you know how it turned out. You don't need to ask the user first. The `send_feedback` block in the reference lists the fields.
+
+```sh
+curl -sS "$BASE/api/feedback" -H "authorization: Bearer $KEY" -H "content-type: application/json" -d @report.json
+```
 
 ## Rename agent display name
 
