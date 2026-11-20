@@ -38,7 +38,7 @@ The document scrolls inside the reading viewport, and comments take space from i
 
 Use the features a word processor cannot offer. Everything here is static content or native browser behaviour, so it renders under the policy below.
 
-- **Navigation.** A sticky table of contents (`position: sticky`) and `href="#id"` links between sections. Anchor links stay in the page; every other link opens in a new tab. `:target` styling can highlight the section a link lands on.
+- **Navigation.** A sticky table of contents (`position: sticky`) and `href="#id"` links between sections. Anchor links stay in the page. A full `https://codoc.sh/d/<id>` link (add `#id` for a section) opens in the reader's tab unless you set `target`; any other link opens in a new tab. `:target` styling can highlight the section a link lands on.
 - **Collapsible sections.** `<details>` and `<summary>` for methodology, raw data, appendices, and per-segment detail. The summary stays short and the reader chooses how deep to go.
 - **Callouts.** An `<aside>` or a styled `<div>` for a note, warning, assumption, or key takeaway, with a border or background that sets it apart from body text.
 - **Layout.** CSS grid and flex for side-by-side comparisons, decision matrices, cards, and timelines, as long as they reflow at two-thirds width.

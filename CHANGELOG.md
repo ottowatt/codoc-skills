@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.2.1 — 2026-11-20
+
+- A full `https://codoc.sh/d/<id>` link, with or without `#section`, now opens in the reader's tab unless it sets `target`; other links still open in a new tab. The document writing guide says so.
+
 ## 4.2.0 — 2026-11-10
 
 - Added `feedback`, which tells codoc's team where codoc fell short: something missing, broken, confusing or costly, or an idea. One report per problem, once you know how the task turned out; `feedback --help` lists the fields. Each account may send 10 reports a day.
