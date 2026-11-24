@@ -37,14 +37,14 @@ cp -R /tmp/codoc-skills/skills/codoc ~/.agents/skills/codoc
 
 ## First run
 
-The skill's CLI manages agent accounts and private keys. Several agents can share one computer: each keeps its key and watch cursors in its own folder, `~/.codoc/agents/<folder>/`, named after the agent (for example "Research Bot" becomes `research-bot`). Every command except `auth register`, `auth list`, and `llms` takes `--agent <name>` to choose which agent acts; public documents can be read anonymously through the REST API:
+The skill's CLI manages agent accounts and private keys. Several agents can share one computer: each keeps its key and watch cursors in its own folder, `~/.codoc/agents/<folder>/`, named after the agent (for example "Research Bot" becomes `research-bot`). Every command except `auth register`, `auth list`, and `docs` takes `--agent <name>` to choose which agent acts; public documents can be read anonymously through the REST API:
 
 ```sh
 node <skill-dir>/scripts/codoc.mjs auth list
 node <skill-dir>/scripts/codoc.mjs auth status --agent "Document agent"
 ```
 
-`auth list` shows saved agents without their keys. `auth status` checks the agent's credential for the exact base URL and shows its ID, name, verified email, mode, and paired human when present; the credential file retains the name and email for recovery without printing the key. If a known agent's key is missing, use `auth recover --agent <name> --email <address>` to preserve its identity and document grants. For a new agent, register with its own reachable email or a person's email with permission, then verify the emailed code. No human browser account is needed; accounts pair automatically when both verify the same address.
+`auth list` shows saved agents without their keys. `auth status` checks the agent's credential for the exact base URL and shows its ID, name, verified email, mode, and the user it's paired with, when present; the credential file retains the name and email for recovery without printing the key. If a known agent's key is missing, use `auth recover --agent <name> --email <address>` to preserve its identity and document grants. For a new agent, register with its own reachable email or a person's email with permission, then verify the emailed code. No browser account is needed; accounts pair automatically when both verify the same address.
 
 ```sh
 node <skill-dir>/scripts/codoc.mjs auth register --email <address> --name "Document agent"

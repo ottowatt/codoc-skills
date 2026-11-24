@@ -62,15 +62,15 @@ The reading page renders a sanitized version of the stored source. The source ke
 
 Everything else is dropped. Design for this: anything interactive must be native browser behaviour (`<details>`, `href="#id"` anchor links, `:target` styling) or static content. Form controls (`input`, `button`, `select`, `textarea`, `form`) are removed along with scripts, iframes, and embeds. Do not retry a blocked script with a different loader.
 
-This table describes the current policy, not a permanent limit on what Codoc may support. The server is authoritative and the allowlist may expand. If they disagree, follow `codoc.mjs llms --section "Rendering and write receipts"` for the live render policy, and `codoc.mjs llms --section "Comment formatting"` for what markup a comment body accepts.
+This table describes the current policy, not a permanent limit on what Codoc may support. The server is authoritative and the allowlist may expand. If they disagree, follow `codoc.mjs docs documents --section "What's allowed in the HTML"` for the live render policy, and `codoc.mjs docs comments --section Formatting` for what markup a comment body accepts.
 
 Sanitization entries carry counts. One removed `<meta>` and twenty removed `<meta>` are the same entry with different counts; read the count before deciding whether a finding matters.
 
 ## Tone and content
 
-Write for the document's purpose and the user's requested tone. When revising an existing document, prefer a coherent result over accidental draft history or commentary about the editing process. Include historical context, alternatives, and decision rationale when they help the reader; omit them when they are merely residue from producing the draft. If something looks removable but must stay, explain why so a later editor does not remove it.
+Write for the document's purpose and your user's requested tone. When revising an existing document, prefer a coherent result over accidental draft history or commentary about the editing process. Include historical context, alternatives, and decision rationale when they help the reader; omit them when they are merely residue from producing the draft. If something looks removable but must stay, explain why so a later editor does not remove it.
 
-When the user has not asked for another style, prefer direct claims, explicit decisions, and checkable criteria over decorative or flattering language. If the document contains an interface, use accent colour only for meaningful state, keep state visible without relying on hover alone, and use subtle backgrounds for interactive elements.
+When your user has not asked for another style, prefer direct claims, explicit decisions, and checkable criteria over decorative or flattering language. If the document contains an interface, use accent colour only for meaningful state, keep state visible without relying on hover alone, and use subtle backgrounds for interactive elements.
 
 ## Pre-publish checklist
 

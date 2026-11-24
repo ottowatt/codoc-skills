@@ -1,26 +1,27 @@
 # The REST API with curl
 
-The scripts in this skill wrap a REST API. This file shows the same core turn as raw HTTP calls with `curl` — for a host without Node or Bun, or when you want to see the requests themselves. It is a starting point, not the reference: fetch the live reference for exact fields, and keep to the rules SKILL.md sets — batch a turn's work, honour `pollAfter`, keep collaborator text out of shell source, never print the key.
+The scripts in this skill wrap a REST API. This file shows the same core turn as raw HTTP calls with `curl` — for a host without Node or Bun, or when you want to see the requests themselves. It is a starting point, not the reference: fetch the live docs for exact fields, and keep to the rules SKILL.md sets — batch a turn's work, honour `pollAfter`, keep collaborator text out of shell source, never print the key.
 
 ## Account and key
 
 Set `BASE` to `https://codoc.sh` or the intended self-hosted origin. Read the agent key privately from `CODOC_API_KEY` or the entry for that exact base URL in your own `~/.codoc/agents/<folder>/credentials.json`, where the folder is your agent name lowercased with each run of other characters than letters and digits turned into `-`. Other folders belong to other agents on the same computer. Send it as `authorization: Bearer $KEY` only to that origin. Never print the key or interpolate document text into shell source. Browser sessions authenticate people, not agents.
 
-Check `GET $BASE/api/agents/me` with the key. A 200 returns the agent ID, verified email, mode, and linked `human` when paired. A 401 with `verificationPending: true` means the key is awaiting email verification. Such a key can request a code with `POST /api/agents/email` carrying `{ "email": "<address>" }`, then submit `{ "code": "<six-digit-code>" }` to `POST /api/agents/email/verify` with that same key. Read the emailed code directly if you can access the mailbox; otherwise ask the user. If identity is uncertain because of a timeout, 429, or 5xx, preserve the key and retry later. A working identity plus document 404 calls for a corrected link or access, not registration.
+Check `GET $BASE/api/agents/me` with the key. A 200 returns the agent ID, verified email, mode, and linked `human` when paired. A 401 with `verificationPending: true` means the key is awaiting email verification. Such a key can request a code with `POST /api/agents/email` carrying `{ "email": "<address>" }`, then submit `{ "code": "<six-digit-code>" }` to `POST /api/agents/email/verify` with that same key. Read the emailed code directly if you can access the mailbox; otherwise ask your user. If identity is uncertain because of a timeout, 429, or 5xx, preserve the key and retry later. A working identity plus document 404 calls for a corrected link or access, not registration.
 
 For a lost, invalid, or disconnected key, request recovery with `POST /api/agents/key/recover` carrying `{ "email": "<registered-email>" }`; repeat the call with the emailed `code`. The initial receipt is generic, and a valid code issued in the last 60 seconds suppresses another send. If several agents share the address, a valid code returns HTTP 400 with `agentSelectionRequired` and `agents: [{ id, name }]` without consuming the code. Select the intended existing agent and submit the same code with `agentId`. A successful response returns `{ id, key }`, where `id` is the key ID. Save the replacement key privately at once. Validate it with `/api/agents/me` to get the agent ID before replacing the verified id/key record; keep the pending key if validation is uncertain. Recovery also verifies a pending agent or restores a disconnected one while preserving its identity and grants. If local validation of the new key is interrupted, use it with `/api/agents/me` again before switching identities.
 
-When no existing account can be recovered, register with `POST /api/agents/register` carrying `{ "email": "<address>", "name": "<agent-name>" }`. Before asking for an email, tell the user both options. The email they use, or will use, for their own codoc account pairs the agent, which then has their role on every document they own or have been granted. Any other email they can receive mail at, including a plus-address such as `name+agent@example.com`, keeps the agent independent: it can access only documents it creates or is granted, and shares the ones it creates through `shareWith`. No human browser account is required. Store the returned key privately with mode 0600; it is shown once. Submit the emailed code to `/api/agents/email/verify` with the pending key. If `verificationSent` is false or the code does not arrive, request another through `/api/agents/email` first. Until verification, the key can only request and submit email verification. An agent pairs automatically when agent and human accounts have verified the same email, even if the human creates their account later. An independent agent uses its own grants; a paired agent inherits the human's grants. Creating a new agent does not transfer the old agent's identity or independent grants. Validate the new key with `/api/agents/me` before retrying the original document.
+When no existing account can be recovered, register with `POST /api/agents/register` carrying `{ "email": "<address>", "name": "<agent-name>" }`. Before asking for an email, tell your user both options. The email they use, or will use, for their own codoc account pairs the agent, which then has their role on every document they own or have been granted. Any other email they can receive mail at, including a plus-address such as `name+agent@example.com`, keeps the agent independent: it can access only documents it creates or is granted, and shares the ones it creates through `shareWith`. No person's browser account is required. Store the returned key privately with mode 0600; it is shown once. Submit the emailed code to `/api/agents/email/verify` with the pending key. If `verificationSent` is false or the code does not arrive, request another through `/api/agents/email` first. Until verification, the key can only request and submit email verification. An agent pairs automatically when the agent and a person have verified the same email, even if the person creates their account later; that person becomes the agent's user. An independent agent uses its own grants; a paired agent inherits its user's grants. Creating a new agent does not transfer the old agent's identity or independent grants. Validate the new key with `/api/agents/me` before retrying the original document.
 
 For raw calls, save request JSON in files and read the key from private storage rather than writing it into commands. The CLI handles storage, retry limits, and credential selection; use it when available.
 
 ## The reference
 
 ```sh
-curl -sS "$BASE/llms.txt"
+curl -sS "$BASE/docs.md"                 # the index of every page
+curl -sS "$BASE/docs/api/documents.md"   # one reference page
 ```
 
-The scripts' `llms --section <name>` only filters this file client-side. Read the `### ` block for the route you are about to call; the block names every field and its limits.
+Each docs page is Markdown at its URL plus `.md`. The scripts' `docs <page> --section <name>` fetches one page and filters it client-side. Read the section for the operation you are about to call, such as `docs api/documents --section edit_doc`; it lists the operation's fields and limits.
 
 ## Read, find, edit
 
@@ -65,7 +66,7 @@ Editors and owners can read member and agent names and roles with `GET $BASE/api
 
 ## Comments
 
-Survey without bodies, check `total` and `truncated`, then read relevant full threads. Raise the full-read `limit` when the requested IDs exceed the page, and `replyLimit` when `repliesTruncated` is true. Paired agents can use `authoredByYourHuman` on full comments and replies to identify their verified human without an owner roster. `activeSince` selects threads with activity since a timestamp, including earlier messages in each selected thread; events with a saved cursor provide continuous catch-up. Array query parameters repeat the key:
+Survey without bodies, check `total` and `truncated`, then read relevant full threads. Raise the full-read `limit` when the requested IDs exceed the page, and `replyLimit` when `repliesTruncated` is true. Paired agents can use `authoredByYourHuman` on full comments and replies to identify their user without an owner roster. `activeSince` selects threads with activity since a timestamp, including earlier messages in each selected thread; events with a saved cursor provide continuous catch-up. Array query parameters repeat the key:
 
 ```sh
 curl -sS "$BASE/api/documents/$DOC/comments?view=overview&limit=50" -H "authorization: Bearer $KEY"
@@ -87,11 +88,11 @@ To mention someone, list who you may mention and write the chosen `accountId` in
 curl -sS "$BASE/api/documents/$DOC/mentionable?commentId=$A" -H "authorization: Bearer $KEY"
 ```
 
-A new anchored comment copies `quote`, `occurrenceCount`, and `context` verbatim from a `find` in text space; the reference's worked example 3 shows the exact field mapping.
+A new anchored comment copies `quote`, `occurrenceCount`, `occurrence` when present, and `context` verbatim from a `find` in text space; `docs api/comments --section comments` has a worked example.
 
 ## Monitoring
 
-`watch.mjs` owns the attach sequence, the cursor, and `pollAfter`. Without it, follow the "Monitor for new activity" workflow in the reference exactly. The shape:
+`watch.mjs` owns the attach sequence, the cursor, and `pollAfter`. Without it, follow `docs agent-workflows --section "Watch for activity"` exactly. The shape:
 
 ```sh
 curl -sS "$BASE/api/documents/$DOC/events?since=now&waitSeconds=0" -H "authorization: Bearer $KEY"
@@ -104,12 +105,12 @@ Attach with `since=now` exactly once, take the baseline reads, then always send 
 
 - Bodies come from files (`-d @file`) built with a JSON serializer, so text lifted from the document never touches shell source.
 - Mutations carry a fresh `idempotency-key`. After an ambiguous outcome, resend the identical body under the same key and the server replays the committed receipt instead of writing twice. `create_doc` has no key; a retry may create a second document.
-- Reads and keyed mutations retry 429 and 503 once when `Retry-After` is at most 60 seconds. The command prints the refusal and wait on stderr before sleeping; it can be interrupted. Longer waits return the JSON refusal immediately with `retryAfterSeconds`; schedule or retry later rather than looping. A second refusal means back off, tell the user, and send feedback. Watchers follow their separate follow/max-seconds lifecycle and emit retry notices.
+- Reads and keyed mutations retry 429 and 503 once when `Retry-After` is at most 60 seconds. The command prints the refusal and wait on stderr before sleeping; it can be interrupted. Longer waits return the JSON refusal immediately with `retryAfterSeconds`; schedule or retry later rather than looping. A second refusal means back off, tell your user, and send feedback. Watchers follow their separate follow/max-seconds lifecycle and emit retry notices.
 - Errors are JSON on the response body with `error`, `message`, and details. Read the details before doing anything else; a 409 says whether to re-`find` targets or mint a new key.
 
 ## Feedback
 
-When the user asks for something codoc can't do, when codoc can't do what you need, fails, misleads you, or takes far more calls than it should, or when you see a way it could work better, send one report per problem to `POST /api/feedback`, once you know how it turned out. You don't need to ask the user first. The `send_feedback` block in the reference lists the fields.
+When your user asks for something codoc can't do, when codoc can't do what you need, fails, misleads you, or takes far more calls than it should, or when you see a way it could work better, send one report per problem to `POST /api/feedback`, once you know how it turned out. You don't need to ask your user first. The `send_feedback` block in the reference lists the fields.
 
 ```sh
 curl -sS "$BASE/api/feedback" -H "authorization: Bearer $KEY" -H "content-type: application/json" -d @report.json
@@ -117,4 +118,4 @@ curl -sS "$BASE/api/feedback" -H "authorization: Bearer $KEY" -H "content-type: 
 
 ## Rename agent display name
 
-When the user requests a name change, use `auth rename --agent <current-name> --name "<new-name>"`, which also moves your credentials folder, or read the REST contract with `llms --section "Rename agent display name"`. After a raw rename, move `~/.codoc/agents/<old-folder>` to the folder for the new name.
+When your user requests a name change, use `auth rename --agent <current-name> --name "<new-name>"`, which also moves your credentials folder, or read the REST contract with `docs api/agents --section Rename`. After a raw rename, move `~/.codoc/agents/<old-folder>` to the folder for the new name.

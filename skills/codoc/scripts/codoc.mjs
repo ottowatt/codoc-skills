@@ -62,7 +62,7 @@ Commands:
   feedback --kind <k> --outcome <o> --summary <s>  tell codoc's team where codoc fell short
   events <doc>                         perform one raw event poll
   delete <doc> --yes                   irreversibly delete a document
-  llms [--section <name>]              print the live API reference or one operation block
+  docs [<page>] [--section <name>]     print a docs page as Markdown, or one section of it
 
 Global flags:
   --agent <name>     the acting agent's name; required unless CODOC_API_KEY is set
@@ -284,16 +284,16 @@ const COMMAND_HELP = {
   --timeout <s>   request timeout; default 30
   --help          show this help`,
   feedback: `Usage: codoc.mjs feedback --kind <kind> --outcome <outcome> --summary <text> [options]
-  Tell codoc's team where codoc fell short of what you or the user needed. Send one
-  report per problem, once you know how it turned out; no need to ask the user first.
-  --kind <kind>          missing    codoc can't do what you or the user needed
+  Tell codoc's team where codoc fell short of what you or your user needed. Send one
+  report per problem, once you know how it turned out; no need to ask your user first.
+  --kind <kind>          missing    codoc can't do what you or your user needed
                          broken     it failed or misbehaved
                          confusing  a response, error or the guide misled you or took retries
                          costly     it worked but took far more calls, bytes or time than it should
                          idea       it worked, but this task shows how it could work better
   --outcome <outcome>    how the task ended: blocked, worked_around, or completed
   --summary <text>       one line
-  --user-request <text>  what the user asked for that codoc couldn't do, in general terms
+  --user-request <text>  what your user asked for that codoc couldn't do, in general terms
   --details <text>       what you tried, what happened, what you expected
   --workaround <text>    what you did instead, including extra calls
   --suggestion <text>    what would have helped
@@ -321,10 +321,11 @@ const COMMAND_HELP = {
   --compact       print compact JSON
   --timeout <s>   request timeout; default 30
   --help          show this help`,
-  llms: `Usage: codoc.mjs llms [--section <name>] [--base <url>]
-  --section <name>  print one ### operation block
+  docs: `Usage: codoc.mjs docs [<page>] [--section <name>] [--base <url>]
+  <page>            a docs page such as api/documents or mentions; omit for the index
+  --section <name>  print one section, by its heading (an operation name such as edit_doc)
   --base <url>      API origin
-  --compact         accepted for consistency; raw reference text is unchanged
+  --compact         accepted for consistency; Markdown is unchanged
   --timeout <s>     request timeout; default 30
   --help            show this help`,
 };
@@ -339,14 +340,14 @@ function baseAndOutput(options) {
 
 const AGENT_FLAG_HELP = "  --agent <name>  acting agent; required unless CODOC_API_KEY is set";
 // Registration names the agent with --name, and these commands act as no agent.
-const WITHOUT_AGENT = new Set(["auth register", "auth list", "llms"]);
+const WITHOUT_AGENT = new Set(["auth register", "auth list", "docs"]);
 
 function flagsFor(command, extra) {
   return { ...COMMON_FLAGS, ...(WITHOUT_AGENT.has(command) ? {} : { "--agent": "value" }), ...extra };
 }
 
 function showHelp(name) {
-  const agentLine = COMMAND_HELP[name] && name !== "llms" && !name.startsWith("auth ") ? `${AGENT_FLAG_HELP}\n` : "";
+  const agentLine = COMMAND_HELP[name] && name !== "docs" && !name.startsWith("auth ") ? `${AGENT_FLAG_HELP}\n` : "";
   process.stdout.write(`${COMMAND_HELP[name] ?? HELP}\n${agentLine}`);
 }
 
@@ -545,18 +546,48 @@ async function captureTextEvidence(context, root, quote, occurrence) {
   return evidence;
 }
 
-function sliceLlmsSection(text, requestedHeading) {
-  const headings = [...text.matchAll(/^(#{2,3})\s+(.+)$/gmu)];
+// Docs page paths are lowercase words joined by hyphens, nested by slashes.
+const DOCS_PAGE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/u;
+
+function docsPath(page) {
+  if (page === undefined) return "/docs.md";
+  if (!DOCS_PAGE_PATTERN.test(page)) throw usage(`Not a docs page: ${page}`, "Run docs with no page to list them.");
+  return `/docs/${page}.md`;
+}
+
+// Headings below the page title. A fence's lines are not headings, so fenced blocks are skipped.
+function sectionHeadings(text) {
+  const headings = [];
+  let fenced = false;
+  let offset = 0;
+  for (const line of text.split("\n")) {
+    if (line.startsWith("```")) fenced = !fenced;
+    const match = fenced ? null : line.match(/^(#{2,3})\s+(.+)$/u);
+    // An operation heading is its name set as code (## `edit_doc`); look it up by the name.
+    if (match) headings.push({ index: offset, level: match[1].length, title: match[2].replaceAll("`", "").trim() });
+    // A rule ends every section before it: the page's closing link to the index follows one.
+    else if (!fenced && line === "---") headings.push({ index: offset, level: 1, title: null });
+    offset += line.length + 1;
+  }
+  return headings;
+}
+
+function mediaType(contentType) {
+  return (contentType ?? "").split(";")[0].trim().toLowerCase();
+}
+
+function sliceSection(text, page, requestedHeading) {
+  const headings = sectionHeadings(text);
   const wanted = requestedHeading.trim().toLowerCase();
-  const index = headings.findIndex((match) => {
-    const title = match[2].trim();
-    const operation = title.match(/^(.+?)\s+—\s+[A-Z]+\s+\/\S.*$/u)?.[1];
-    return (operation ?? title).toLowerCase() === wanted;
-  });
-  if (index < 0) throw usage(`No llms.txt section named ${requestedHeading}.`);
+  const index = headings.findIndex((heading) => heading.title?.toLowerCase() === wanted);
+  if (index < 0) {
+    throw usage(
+      `No section named ${requestedHeading} on ${page ?? "the docs index"}.`,
+      `Sections: ${headings.flatMap((heading) => heading.title ?? []).join("; ")}`,
+    );
+  }
   const selected = headings[index];
-  const level = selected[1].length;
-  const next = headings.slice(index + 1).find((match) => match[1].length <= level);
+  const next = headings.slice(index + 1).find((heading) => heading.level <= selected.level);
   return text.slice(selected.index, next?.index ?? text.length).replace(/\n+$/u, "");
 }
 
@@ -810,21 +841,35 @@ async function documentCommand(command, argv) {
     feedback: { "--kind": "value", "--outcome": "value", "--summary": "value", "--user-request": "value", "--details": "value", "--workaround": "value", "--suggestion": "value", "--area": "value", "--doc": "value", "--file": "value" },
     events: { "--since": "value", "--wait": "value", "--listening": "boolean", "--exclude-self": "boolean" },
     delete: { "--yes": "boolean" },
-    llms: { "--section": "value" },
+    docs: { "--section": "value" },
   };
   const { options, positional } = parseArgs(argv, flagsFor(command, specs[command]));
   if (options.help) return showHelp(command);
   const context = baseAndOutput(options);
 
-  if (command === "llms") {
-    noExtraPositionals(positional, 0);
-    const result = await request(context.base, "/llms.txt", {
+  if (command === "docs") {
+    noExtraPositionals(positional, 1);
+    const [page] = positional;
+    const result = await request(context.base, docsPath(page), {
       timeoutSeconds: context.timeoutSeconds,
       expectText: true,
     });
-    if (!result.ok) throw new CliError(1, result.data);
+    // A sign-in page or a proxy's error page can answer 200 too, and a server without docs
+    // answers 404 in HTML: only Markdown is the docs, and only a Markdown 404 is a missing page.
+    const markdown = mediaType(result.headers.get("content-type")) === "text/markdown";
+    if (markdown && result.status === 404 && page !== undefined) {
+      throw new CliError(1, { error: "not_found", message: `No docs page named ${page}.`, hint: "Run docs with no page to list them." });
+    }
+    if (!result.ok || !markdown) {
+      throw new CliError(1, {
+        error: "docs_unavailable",
+        message: `${context.base} did not return its docs (HTTP ${result.status}, ${result.headers.get("content-type") ?? "no content type"}).`,
+        hint: "Check that --base is a codoc server that serves /docs.",
+        ...(typeof result.data?.retryAfterSeconds === "number" ? { retryAfterSeconds: result.data.retryAfterSeconds } : {}),
+      });
+    }
     let text = result.text;
-    if (options.section) text = sliceLlmsSection(text, options.section);
+    if (options.section) text = sliceSection(text, page, options.section);
     process.stdout.write(`${text}${text.endsWith("\n") ? "" : "\n"}`);
     return;
   }

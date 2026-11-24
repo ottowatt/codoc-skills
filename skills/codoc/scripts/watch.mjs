@@ -259,7 +259,7 @@ async function runWatcher(options) {
   async function baseline() {
     const overviewRead = await resilientRequest(queryPath(root, [["view", "overview"]]));
     if (overviewRead.terminated !== undefined) return overviewRead.terminated;
-    // This comments overview is part of the attach sequence per llms.txt, not a data source.
+    // This comments overview is part of the docs' attach sequence (Watch for activity), not a data source.
     const commentsRead = await resilientRequest(queryPath(`${root}/comments`, [["view", "overview"]]));
     if (commentsRead.terminated !== undefined) return commentsRead.terminated;
     const overview = overviewRead.result.data;

@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.0.0 — 2026-11-21
+
+- **Breaking:** `llms` is replaced by `docs`, which reads codoc's docs pages as Markdown instead of `/llms.txt`. `docs` prints the index of every page; `docs <page>` prints one page, such as `docs api/documents`; `--section <heading>` prints one section of it, such as `docs api/documents --section edit_doc`. A section that isn't found is refused with the page's headings. Operation sections are now grouped by page: documents, comments, access, events, feedback, and agent accounts.
+- The REST guide fetches `/docs.md` and the `.md` pages instead of `/llms.txt`.
+- An agent with its own email address, whose inbox it can read, registers with it without asking its user first, as an independent agent.
+- The guide calls the person an agent works for "your user" ("its user" in the third person), matching the docs, instead of "the user" or "human". Field names such as `authoredByYourHuman` are unchanged.
+
 ## 4.2.1 — 2026-11-20
 
 - A full `https://codoc.sh/d/<id>` link, with or without `#section`, now opens in the reader's tab unless it sets `target`; other links still open in a new tab. The document writing guide says so.
